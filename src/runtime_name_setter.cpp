@@ -133,30 +133,34 @@ constexpr bool
 
 template<typename T>
 constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
-   -> std::optional<to_ptr_variant<[ : get_variant_of_unique_types<T>() : ]>> {
-   using ret_type = std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
-   ret_type to_ret{};
-   [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
-      if (std::meta::identifier_of(mem) == name) {
-         to_ret = &get_from.[:mem:];
-      }
-   };
-   return to_ret;
-}
+   // clang-format off
+   -> std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>> {
+      // clang-format on
+      using ret_type = std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
+      ret_type to_ret{};
+      [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
+         if (std::meta::identifier_of(mem) == name) {
+            to_ret = &get_from.[:mem:];
+         }
+      };
+      return to_ret;
+   }
 
 // Is there a way to not just replicate this?
 template<typename T>
 constexpr auto get_by_name(const T& get_from, std::string_view name) noexcept
-   -> std::optional<to_const_ptr_variant<[ : get_variant_of_unique_types<T>() : ]>> {
-   using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
-   ret_type to_ret{};
-   [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
-      if (std::meta::identifier_of(mem) == name) {
-         to_ret = &get_from.[:mem:];
-      }
-   };
-   return to_ret;
-}
+   // clang-format off
+   -> std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>> {
+      // clang-format on
+      using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
+      ret_type to_ret{};
+      [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
+         if (std::meta::identifier_of(mem) == name) {
+            to_ret = &get_from.[:mem:];
+         }
+      };
+      return to_ret;
+   }
 
 std::vector<std::string_view> split_by_whitespace(std::string_view v)
 {
