@@ -74,7 +74,9 @@ constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
    if constexpr (
       std::meta::is_function(Info) && std::meta::is_class_member(Info) && !std::meta::is_static_member(Info)) {
       // Member function
-      static_assert(std::same_as<std::remove_cvref_t<ParamTypes...[0]>, [:std::meta::parent_of(Info):]>);
+      static_assert(std::convertible_to<
+                    std::add_lvalue_reference_t<std::remove_cvref_t<ParamTypes...[0]>>,
+                    std::add_lvalue_reference_t<[:std::meta::parent_of(Info):]>>);
       static_assert(sizeof...(ParamTypes) - 1 == std::meta::parameters_of(Info).size());
       return []<typename ObjType, typename... MemFuncParams>(
                 ObjType&& object, MemFuncParams&&... rest) -> decltype(auto) {
@@ -106,9 +108,12 @@ struct s {
    static void func2(int b, int c) { std::println("s::func2 with b = {}, c = {}", b, c); }
 };
 
+struct derived : s {};
+
 int main()
 {
    call_with_param_names<^test>(param<"see">(3), param<"a">(1), param<"ptr">(std::make_unique<int>(3)), param<"b">(2));
    call_with_param_names<^s::func2>(param<"c">(10), param<"b">(5));
    call_with_param_names<^s::func>(s{}, param<"x">(40));
+   call_with_param_names<^s::func>(derived{}, param<"x">(20));
 }
