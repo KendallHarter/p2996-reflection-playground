@@ -79,7 +79,7 @@ constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
       std::array<std::size_t, sizeof...(ParamTypes)> to_ret;
       std::size_t loc = 0;
       [:expand(std::initializer_list<fixed_string<max_size>>{std::remove_cvref_t<ParamTypes>::name...}):] >> [&]<auto Name> {
-         static constexpr int name_index = []() {
+         static constexpr std::size_t name_index = []() {
             const auto params = std::meta::parameters_of(Info);
             const auto param_loc = std::ranges::find(params, Name.view(), std::meta::identifier_of);
             return std::ranges::distance(params.begin(), param_loc);
@@ -93,7 +93,7 @@ constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 
    auto tuple_params = std::forward_as_tuple(std::forward_like<ParamTypes>(args.value)...);
    const auto get_tuple_params = [&]<std::size_t... I>(const std::index_sequence<I...>) {
-      return std::forward_as_tuple(std::get<param_mapping[I]>(std::forward_like<ParamTypes>(tuple_params))...);
+      return std::forward_as_tuple(std::get<param_mapping[I]>(std::forward_like<ParamTypes...[param_mapping[I]]>(tuple_params))...);
    };
 
    return std::apply([:Info:], get_tuple_params(std::make_index_sequence<param_mapping.size()>{}));
