@@ -1,20 +1,17 @@
-#include <experimental/meta>
-#include <tuple>
-#include <print>
-#include <string_view>
 #include <cassert>
-#include <variant>
 #include <cctype>
+#include <experimental/meta>
 #include <iostream>
+#include <print>
 #include <sstream>
+#include <string_view>
+#include <tuple>
 #include <utility>
+#include <variant>
 
 template<std::size_t N>
 struct fixed_string {
-   constexpr fixed_string(const char (&val)[N]) noexcept
-   {
-      std::ranges::copy(val, storage_);
-   }
+   constexpr fixed_string(const char (&val)[N]) noexcept { std::ranges::copy(val, storage_); }
 
    friend bool operator==(const fixed_string&, const fixed_string&) = default;
 
@@ -24,20 +21,22 @@ struct fixed_string {
 };
 
 namespace __impl {
-   template<auto... vals>
-   struct replicator_type {
-      template<typename F>
-      constexpr void operator>>(F body) const {
-         (body.template operator()<vals>(), ...);
-      }
-   };
+template<auto... vals>
+struct replicator_type {
+   template<typename F>
+   constexpr void operator>>(F body) const
+   {
+      (body.template operator()<vals>(), ...);
+   }
+};
 
-   template<auto... vals>
-   replicator_type<vals...> replicator = {};
-}
+template<auto... vals>
+replicator_type<vals...> replicator = {};
+} // namespace __impl
 
 template<typename R>
-consteval auto expand(R range) {
+consteval auto expand(R range)
+{
    std::vector<std::meta::info> args;
    for (auto r : range) {
       args.push_back(reflect_value(r));
@@ -64,7 +63,8 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
    bool was_set = false;
    [:expand(std::meta::nonstatic_data_members_of(^SetIn)):] >> [&]<auto mem> {
       if (!was_set && std::meta::identifier_of(mem) == name) {
-         if constexpr (std::meta::type_is_assignable(std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^T)) {
+         if constexpr (std::meta::type_is_assignable(
+                          std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^T)) {
             set_in.[:mem:] = std::forward<T>(set_value);
             was_set = true;
          }
@@ -112,27 +112,28 @@ using to_const_ptr_variant = to_const_ptr_variant_impl<T>::type;
 template<typename SetIn, typename Var>
 constexpr bool assign_variant_by_name_impl(SetIn& set_in, std::string_view name, Var&& var) noexcept
 {
-   return std::visit([&]<typename T>(T&& value) -> bool {
-      return set_by_name(set_in, name, std::forward<T>(value));
-   }, std::forward<Var>(var));
+   return std::visit(
+      [&]<typename T>(T&& value) -> bool { return set_by_name(set_in, name, std::forward<T>(value)); },
+      std::forward<Var>(var));
 }
 
 template<typename T>
-constexpr bool assign_variant_by_name(T& set_in, std::string_view name, const [:get_variant_of_unique_types<T>():]& var) noexcept
+constexpr bool
+   assign_variant_by_name(T& set_in, std::string_view name, const[:get_variant_of_unique_types<T>():] & var) noexcept
 {
    return assign_variant_by_name_impl(set_in, name, var);
 }
 
 template<typename T>
-constexpr bool assign_variant_by_name(T& set_in, std::string_view name, [:get_variant_of_unique_types<T>():]&& var) noexcept
+constexpr bool
+   assign_variant_by_name(T& set_in, std::string_view name, [:get_variant_of_unique_types<T>():] && var) noexcept
 {
    return assign_variant_by_name_impl(set_in, name, std::move(var));
 }
 
 template<typename T>
 constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
-   -> std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>>
-{
+   -> std::optional<to_ptr_variant<[ : get_variant_of_unique_types<T>() : ]>> {
    using ret_type = std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
    ret_type to_ret{};
    [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
@@ -146,8 +147,7 @@ constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
 // Is there a way to not just replicate this?
 template<typename T>
 constexpr auto get_by_name(const T& get_from, std::string_view name) noexcept
-   -> std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>
-{
+   -> std::optional<to_const_ptr_variant<[ : get_variant_of_unique_types<T>() : ]>> {
    using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
    ret_type to_ret{};
    [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
@@ -237,13 +237,10 @@ consteval std::meta::info make_min_size() noexcept
       const auto& [i, dummy] = info;
       return std::meta::data_member_spec(
          std::meta::type_of(i),
-         {
-            .name = std::meta::identifier_of(i),
-            .alignment = std::meta::alignment_of(i),
-            .width = std::nullopt,
-            .no_unique_address = true
-         }
-      );
+         {.name = std::meta::identifier_of(i),
+          .alignment = std::meta::alignment_of(i),
+          .width = std::nullopt,
+          .no_unique_address = true});
    });
 
    return std::meta::define_class(^min_size, opts);
@@ -268,7 +265,9 @@ constexpr std::size_t constexpr_strlen(const char* c) noexcept
 {
    if consteval {
       std::size_t size = 0;
-      while (c[size] != '\0') { size += 1; }
+      while (c[size] != '\0') {
+         size += 1;
+      }
       return size;
    }
    else {
@@ -279,70 +278,69 @@ constexpr std::size_t constexpr_strlen(const char* c) noexcept
 int main()
 {
    using command_ptr = void (*)(values&, const std::vector<std::string_view>&);
-   static constexpr auto valid_commands = std::to_array<std::pair<const char*, command_ptr>>({
-      {"set", [](values& vals, const std::vector<std::string_view>& args) {
-         if (args.size() < 2) {
-            std::println("Error: Missing field name");
-            return;
-         }
-         if (args.size() < 3) {
-            std::println("Error: Missing value in set command");
-            return;
-         }
-         const auto field_name = args[1];
-         const auto loc_opt = get_by_name(vals, field_name);
-         if (!loc_opt) {
-            std::println("Error: No field named {}", field_name);
-            return;
-         }
-         const auto value_to_set = args[2];
-         std::visit([&](const auto& value) {
-            if constexpr (requires { std::declval<std::stringstream>() >> *value; }) {
-               std::stringstream sstr{value_to_set};
-               auto old_value = std::move(*value);
-               sstr >> *value;
-               if (!sstr) {
-                  std::println("Error: Could not parse value");
-                  *value = std::move(old_value);
-               }
-            }
-            else {
-               std::println("Error: Field cannot be set");
-            }
-         }, *loc_opt);
-      }},
-      {"view", [](values& vals, const std::vector<std::string_view>& args) {
-         if (args.size() < 2) {
-            std::println("Error: Missing field name");
-            return;
-         }
-         const auto field_name = args[1];
-         const auto loc_opt = get_by_name(vals, field_name);
-         if (!loc_opt) {
-            std::println("Error: No field named {}", field_name);
-            return;
-         }
-         std::visit([&](const auto& value) {
-            print_named_value(field_name, *value);
-         }, *loc_opt);
-         std::println("");
-      }},
-      {"view_all", [](values& vals, const std::vector<std::string_view>& args) {
-         [:expand(std::meta::nonstatic_data_members_of(^values)):] >> [&]<auto mem> {
-            std::print("   ");
-            print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
-            std::println("");
-         };
-      }}
-   });
+   static constexpr auto valid_commands = std::to_array<std::pair<const char*, command_ptr>>(
+      {{"set",
+        [](values& vals, const std::vector<std::string_view>& args) {
+           if (args.size() < 2) {
+              std::println("Error: Missing field name");
+              return;
+           }
+           if (args.size() < 3) {
+              std::println("Error: Missing value in set command");
+              return;
+           }
+           const auto field_name = args[1];
+           const auto loc_opt = get_by_name(vals, field_name);
+           if (!loc_opt) {
+              std::println("Error: No field named {}", field_name);
+              return;
+           }
+           const auto value_to_set = args[2];
+           std::visit(
+              [&](const auto& value) {
+                 if constexpr (requires { std::declval<std::stringstream>() >> *value; }) {
+                    std::stringstream sstr{value_to_set};
+                    auto old_value = std::move(*value);
+                    sstr >> *value;
+                    if (!sstr) {
+                       std::println("Error: Could not parse value");
+                       *value = std::move(old_value);
+                    }
+                 }
+                 else {
+                    std::println("Error: Field cannot be set");
+                 }
+              },
+              *loc_opt);
+        }},
+       {"view",
+        [](values& vals, const std::vector<std::string_view>& args) {
+           if (args.size() < 2) {
+              std::println("Error: Missing field name");
+              return;
+           }
+           const auto field_name = args[1];
+           const auto loc_opt = get_by_name(vals, field_name);
+           if (!loc_opt) {
+              std::println("Error: No field named {}", field_name);
+              return;
+           }
+           std::visit([&](const auto& value) { print_named_value(field_name, *value); }, *loc_opt);
+           std::println("");
+        }},
+       {"view_all", [](values& vals, const std::vector<std::string_view>& args) {
+           [:expand(std::meta::nonstatic_data_members_of(^values)):] >> [&]<auto mem> {
+              std::print("   ");
+              print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
+              std::println("");
+           };
+        }}});
    static constexpr auto total_len
       = valid_commands.size()
       + std::ranges::fold_left(
-         std::ranges::views::transform(
-            valid_commands | std::ranges::views::elements<0>,
-            constexpr_strlen),
-         0,
-         std::plus<>{});
+           std::ranges::views::transform(valid_commands | std::ranges::views::elements<0>, constexpr_strlen),
+           0,
+           std::plus<>{});
    static constexpr std::array<char, total_len> arguments_string = []() {
       std::array<char, total_len> to_ret;
       auto copy_loc = to_ret.begin();

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+changed_files=$(git diff --name-only --diff-filter=AM --staged)
+
+if ! command -v clang-format; then
+   echo "Could not find clang-format" >&2
+   exit 1
+fi
+
+# clang_format_major_version=$(clang-format --version | grep -o "[0-9]\+\.[0-9]\+\.[0-9]\+" | grep -o "^[0-9]\+")
+
+# if $((${clang_format_major_version} < 16)); then
+#    echo "clang-format version must be at least 16.0.0" >&2
+#    exit 1
+# fi
+
+for i in ${changed_files}; do
+   if [[ "$i" =~ .*\.(cpp|hpp) ]]; then
+      clang-format -i "$i"
+      git add "$i"
+   fi
+done

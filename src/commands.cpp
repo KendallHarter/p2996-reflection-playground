@@ -1,25 +1,27 @@
-#include <experimental/meta>
-#include <string_view>
-#include <print>
-#include <iostream>
-#include <string>
 #include <concepts>
+#include <experimental/meta>
+#include <iostream>
+#include <print>
+#include <string>
+#include <string_view>
 
 namespace __impl {
-   template<auto... vals>
-   struct replicator_type {
-      template<typename F>
-      constexpr void operator>>(F body) const {
-         (body.template operator()<vals>(), ...);
-      }
-   };
+template<auto... vals>
+struct replicator_type {
+   template<typename F>
+   constexpr void operator>>(F body) const
+   {
+      (body.template operator()<vals>(), ...);
+   }
+};
 
-   template<auto... vals>
-   replicator_type<vals...> replicator = {};
-}
+template<auto... vals>
+replicator_type<vals...> replicator = {};
+} // namespace __impl
 
 template<typename R>
-consteval auto expand(R range) {
+consteval auto expand(R range)
+{
    std::vector<std::meta::info> args;
    for (auto r : range) {
       args.push_back(reflect_value(r));
@@ -51,25 +53,21 @@ constexpr auto get_type_alias_names() noexcept
    using func_ptr = void (*)(const std::vector<std::string_view>&);
    std::vector<std::pair<std::string_view, func_ptr>> to_ret;
    static constexpr auto func = []<std::meta::info Mem>(const std::vector<std::string_view>& args) static {
-      static constexpr auto func_type = ^[:Mem:]::func;
+      static constexpr auto func_type = ^[:Mem:] ::func;
       static constexpr auto func_value = std::meta::value_of(func_type);
       static constexpr auto func_refl = ^decltype([:func_value:])::operator();
       static constexpr auto num_params = std::meta::parameters_of(func_refl).size();
       if (num_params != args.size() - 1) {
          std::println(
-            "Error: Got {} parameter{}, expected {}.",
-            args.size() - 1,
-            (args.size() - 1) == 1 ? "" : "s",
-            num_params);
+            "Error: Got {} parameter{}, expected {}.", args.size() - 1, (args.size() - 1) == 1 ? "" : "s", num_params);
          return;
       }
       std::array<std::string_view, num_params> to_call_with;
       std::ranges::copy(args.begin() + 1, args.end(), to_call_with.begin());
-      std::apply([:Mem:]::func, to_call_with);
+      std::apply([:Mem:] ::func, to_call_with);
    };
-   [:expand(std::meta::members_of(Info) | std::views::filter(std::meta::is_alias)):] >> [&]<auto Mem> {
-      to_ret.emplace_back(std::meta::identifier_of(Mem), &func.template operator()<Mem>);
-   };
+   [:expand(std::meta::members_of(Info) | std::views::filter(std::meta::is_alias)):]
+      >> [&]<auto Mem> { to_ret.emplace_back(std::meta::identifier_of(Mem), &func.template operator()<Mem>); };
    return to_ret;
 }
 
@@ -102,8 +100,8 @@ struct commands {
 };
 
 template<typename... U>
-   requires (std::same_as<U, std::string_view> && ...)
-using ptr_fun = void (*)(const U&...);
+   requires(std::same_as<U, std::string_view> && ...)
+using ptr_fun = void(*)(const U&...);
 
 template<auto P>
 struct command_ptr {
@@ -130,13 +128,12 @@ struct commands<void> {
          if (args[0] == "help") {
             std::println("   Commands and arguments:");
             [:expand(std::meta::members_of(^Self) | std::views::filter(std::meta::is_alias)):] >> [&]<auto Alias> {
-               static constexpr auto func_type = ^[:Alias:]::func;
+               static constexpr auto func_type = ^[:Alias:] ::func;
                static constexpr auto func_value = std::meta::value_of(func_type);
                static constexpr auto func_refl = ^decltype([:func_value:])::operator();
                std::print("      {}", std::meta::identifier_of(Alias));
-               [:expand(std::meta::parameters_of(func_refl)):] >> [&]<auto Param> {
-                  std::print(" {}", std::meta::identifier_of(Param));
-               };
+               [:expand(std::meta::parameters_of(func_refl)):]
+                  >> [&]<auto Param> { std::print(" {}", std::meta::identifier_of(Param)); };
                std::print("\n");
             };
             return;
@@ -151,13 +148,9 @@ struct commands<void> {
 };
 
 struct test_commands : commands<> {
-   using goodbye = command<[]() {
-      std::println("goodbye!");
-   }>;
+   using goodbye = command<[]() { std::println("goodbye!"); }>;
 
-   using greet = command<[](std::string_view name) {
-      std::println("Hello {}.", name);
-   }>;
+   using greet = command<[](std::string_view name) { std::println("Hello {}.", name); }>;
 };
 
 int main()
