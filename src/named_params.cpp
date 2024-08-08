@@ -91,6 +91,7 @@ constexpr auto get_tuple_params(ParamTypes&&... args)
 }
 
 template<std::meta::info Info, typename... ParamTypes>
+   requires(std::meta::is_function(Info))
 constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 {
    if constexpr (
@@ -110,7 +111,7 @@ constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
          // clang-format on
       }(std::forward<ParamTypes>(args)...);
    }
-   else if constexpr (std::meta::is_function(Info)) {
+   else {
       // Normal function
       static_assert(sizeof...(ParamTypes) == std::meta::parameters_of(Info).size());
       static constexpr auto param_mapping = get_param_mapping<Info, std::remove_cvref_t<ParamTypes>::name...>();
