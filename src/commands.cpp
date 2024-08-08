@@ -1,33 +1,11 @@
+#include "common.hpp"
+
 #include <concepts>
 #include <experimental/meta>
 #include <iostream>
 #include <print>
 #include <string>
 #include <string_view>
-
-namespace __impl {
-template<auto... vals>
-struct replicator_type {
-   template<typename F>
-   constexpr void operator>>(F body) const
-   {
-      (body.template operator()<vals>(), ...);
-   }
-};
-
-template<auto... vals>
-replicator_type<vals...> replicator = {};
-} // namespace __impl
-
-template<typename R>
-consteval auto expand(R range)
-{
-   std::vector<std::meta::info> args;
-   for (auto r : range) {
-      args.push_back(reflect_value(r));
-   }
-   return substitute(^__impl::replicator, args);
-}
 
 // template<typename T>
 // struct command_ptr_impl {

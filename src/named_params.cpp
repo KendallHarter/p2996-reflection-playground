@@ -1,55 +1,9 @@
+#include "common.hpp"
+
 #include <experimental/meta>
 #include <initializer_list>
 #include <memory>
 #include <print>
-
-template<std::size_t N>
-struct fixed_string {
-   constexpr fixed_string() noexcept { std::ranges::fill(storage_, '\0'); }
-
-   constexpr fixed_string(const char (&val)[N]) noexcept { std::ranges::copy(val, storage_); }
-
-   template<std::size_t ToSize>
-      requires(ToSize > N)
-   constexpr operator fixed_string<ToSize>() const noexcept
-   {
-      fixed_string<ToSize> to_ret;
-      std::ranges::copy(storage_, std::begin(to_ret.storage_));
-      return to_ret;
-   }
-
-   friend bool operator==(const fixed_string&, const fixed_string&) = default;
-
-   constexpr std::string_view view() const noexcept { return std::string_view{storage_}; }
-
-   inline static constexpr std::size_t size = N;
-
-   char storage_[N];
-};
-
-namespace __impl {
-template<auto... vals>
-struct replicator_type {
-   template<typename F>
-   constexpr void operator>>(F body) const
-   {
-      (body.template operator()<vals>(), ...);
-   }
-};
-
-template<auto... vals>
-replicator_type<vals...> replicator = {};
-} // namespace __impl
-
-template<typename R>
-consteval auto expand(R range)
-{
-   std::vector<std::meta::info> args;
-   for (auto r : range) {
-      args.push_back(std::meta::reflect_value(r));
-   }
-   return substitute(^__impl::replicator, args);
-}
 
 template<fixed_string Name, typename T>
 struct param_struct {
@@ -90,8 +44,31 @@ constexpr auto get_tuple_params(ParamTypes&&... args)
    }(std::make_index_sequence<sizeof...(ParamTypes)>{});
 }
 
+consteval bool all_params_have_consistent_identifiers(std::meta::info func)
+{
+   const auto params = std::meta::parameters_of(func);
+   for (const auto& param : params) {
+      if (!std::meta::has_consistent_identifier(param)) {
+         return false;
+      }
+   };
+   return true;
+}
+
+consteval bool all_params_have_identifiers(std::meta::info func)
+{
+   const auto params = std::meta::parameters_of(func);
+   for (const auto& param : params) {
+      if (!std::meta::has_identifier(param)) {
+         return false;
+      }
+   };
+   return true;
+}
+
 template<std::meta::info Info, typename... ParamTypes>
-   requires(std::meta::is_function(Info))
+   requires(
+      std::meta::is_function(Info) && all_params_have_consistent_identifiers(Info) && all_params_have_identifiers(Info))
 constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 {
    if constexpr (

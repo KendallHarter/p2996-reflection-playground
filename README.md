@@ -1,5 +1,5 @@
 # p2996-reflection-playground
-Playing around with proposed C++ reflection
+Playing around with proposed C++ reflection.
 
 There's no guarantee that these will continue to build as the compiler
 continues to advance but by running prepare.sh with the environment

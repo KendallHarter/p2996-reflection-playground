@@ -1,3 +1,5 @@
+#include "common.hpp"
+
 #include <cassert>
 #include <cctype>
 #include <experimental/meta>
@@ -8,41 +10,6 @@
 #include <tuple>
 #include <utility>
 #include <variant>
-
-template<std::size_t N>
-struct fixed_string {
-   constexpr fixed_string(const char (&val)[N]) noexcept { std::ranges::copy(val, storage_); }
-
-   friend bool operator==(const fixed_string&, const fixed_string&) = default;
-
-   constexpr std::string_view view() const noexcept { return std::string_view{storage_}; }
-
-   char storage_[N];
-};
-
-namespace __impl {
-template<auto... vals>
-struct replicator_type {
-   template<typename F>
-   constexpr void operator>>(F body) const
-   {
-      (body.template operator()<vals>(), ...);
-   }
-};
-
-template<auto... vals>
-replicator_type<vals...> replicator = {};
-} // namespace __impl
-
-template<typename R>
-consteval auto expand(R range)
-{
-   std::vector<std::meta::info> args;
-   for (auto r : range) {
-      args.push_back(reflect_value(r));
-   }
-   return substitute(^__impl::replicator, args);
-}
 
 template<typename SetIn, typename T>
 consteval bool can_set_with_type()
