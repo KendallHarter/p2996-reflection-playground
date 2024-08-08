@@ -63,43 +63,74 @@ constexpr auto param(T&& value)
    return param_struct<name, decltype(std::forward<T>(value))>{std::forward<T>(value)};
 }
 
+template<std::meta::info Info, fixed_string... Names>
+consteval auto get_param_mapping()
+{
+   static constexpr auto max_size = std::ranges::max({Names.size...});
+   std::array<std::size_t, sizeof...(Names)> to_ret;
+   std::size_t loc = 0;
+   [:expand(std::initializer_list<fixed_string<max_size>>{Names...}):] >> [&]<auto Name> {
+      static constexpr std::size_t name_index = []() {
+         const auto params = std::meta::parameters_of(Info);
+         const auto param_loc = std::ranges::find(params, Name.view(), std::meta::identifier_of);
+         return std::ranges::distance(params.begin(), param_loc);
+      }();
+      static_assert(name_index != std::meta::parameters_of(Info).size(), "Illegal parameter name");
+      to_ret[name_index] = loc;
+      loc += 1;
+   };
+   return to_ret;
+}
+
+template<std::array ParamMapping, typename... ParamTypes>
+constexpr auto get_tuple_params(ParamTypes&&... args)
+{
+   return [&]<std::size_t... I>(std::index_sequence<I...>) {
+      return std::forward_as_tuple(std::forward_like<ParamTypes...[ParamMapping[I]]>(args...[ParamMapping[I]])...);
+   }(std::make_index_sequence<sizeof...(ParamTypes)>{});
+}
+
 template<std::meta::info Info, typename... ParamTypes>
 constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 {
-   static_assert(sizeof...(ParamTypes) == std::meta::parameters_of(Info).size());
-   static constexpr auto max_size = std::ranges::max({std::remove_cvref_t<ParamTypes>::name.size...});
-   static constexpr auto param_mapping = [&]() {
-      std::array<std::size_t, sizeof...(ParamTypes)> to_ret;
-      std::size_t loc = 0;
-      [:expand(std::initializer_list<fixed_string<max_size>>{std::remove_cvref_t<ParamTypes>::name...}):]
-         >> [&]<auto Name> {
-              static constexpr std::size_t name_index = []() {
-                 const auto params = std::meta::parameters_of(Info);
-                 const auto param_loc = std::ranges::find(params, Name.view(), std::meta::identifier_of);
-                 return std::ranges::distance(params.begin(), param_loc);
-              }();
-              static_assert(name_index != std::meta::parameters_of(Info).size(), "Illegal parameter name");
-              to_ret[name_index] = loc;
-              loc += 1;
-           };
-      return to_ret;
-   }();
-
-   auto tuple_params = std::forward_as_tuple(std::forward_like<ParamTypes>(args.value)...);
-   const auto get_tuple_params = [&]<std::size_t... I>(const std::index_sequence<I...>) {
-      return std::forward_as_tuple(
-         std::get<param_mapping[I]>(std::forward_like<ParamTypes...[param_mapping[I]]>(tuple_params))...);
-   };
-
-   return std::apply([:Info:], get_tuple_params(std::make_index_sequence<param_mapping.size()>{}));
+   if constexpr (
+      std::meta::is_function(Info) && std::meta::is_class_member(Info) && !std::meta::is_static_member(Info)) {
+      // Member function
+      static_assert(std::same_as<std::remove_cvref_t<ParamTypes...[0]>, [:std::meta::parent_of(Info):]>);
+      static_assert(sizeof...(ParamTypes) - 1 == std::meta::parameters_of(Info).size());
+      return []<typename ObjType, typename... MemFuncParams>(
+                ObjType&& object, MemFuncParams&&... rest) -> decltype(auto) {
+         static constexpr auto param_mapping = get_param_mapping<Info, std::remove_cvref_t<MemFuncParams>::name...>();
+         // clang-format off
+         return std::apply(
+            &[:Info:],
+            std::tuple_cat(
+               std::forward_as_tuple(std::forward<ObjType>(object)),
+               get_tuple_params<param_mapping>(std::forward_like<MemFuncParams>(rest.value)...)));
+         // clang-format on
+      }(std::forward<ParamTypes>(args)...);
+   }
+   else if constexpr (std::meta::is_function(Info)) {
+      // Normal function
+      static_assert(sizeof...(ParamTypes) == std::meta::parameters_of(Info).size());
+      static constexpr auto param_mapping = get_param_mapping<Info, std::remove_cvref_t<ParamTypes>::name...>();
+      return std::apply([:Info:], get_tuple_params<param_mapping>(std::forward_like<ParamTypes>(args.value)...));
+   }
 }
 
 void test(int a, int b, int see, std::unique_ptr<int> ptr)
 {
-   std::println("a = {}, b = {}, see = {}, *ptr = {}", a, b, see, *ptr);
+   std::println("test with a = {}, b = {}, see = {}, *ptr = {}", a, b, see, *ptr);
 }
+
+struct s {
+   void func(int x) { std::println("s::func with x = {}", x); }
+   static void func2(int b, int c) { std::println("s::func2 with b = {}, c = {}", b, c); }
+};
 
 int main()
 {
    call_with_param_names<^test>(param<"see">(3), param<"a">(1), param<"ptr">(std::make_unique<int>(3)), param<"b">(2));
+   call_with_param_names<^s::func2>(param<"c">(10), param<"b">(5));
+   call_with_param_names<^s::func>(s{}, param<"x">(40));
 }
