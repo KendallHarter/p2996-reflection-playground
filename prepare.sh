@@ -48,4 +48,6 @@ fi
 popd
 
 CC="$(pwd)/tools/bin/clang" CXX="$(pwd)/tools/bin/clang++" \
-   cmake -DCMAKE_BUILD_TYPE=Debug -B build -G Ninja
+   cmake \
+   -DCMAKE_EXPORT_COMPILE_COMMANDS=True \
+   -DCMAKE_BUILD_TYPE=Debug -B build -G Ninja

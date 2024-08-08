@@ -3,7 +3,7 @@ Playing around with proposed C++ reflection
 
 There's no guarantee that these will continue to build as the compiler
 continues to advance but by running prepare.sh with the environment
-variable GUARANTEE_BUILD set to non-zero value, a known safe commit will
+variable `GUARANTEE_BUILD` set to a non-zero value, a known safe commit will
 be used when building Clang.
 Otherwise the latest commit on the branch p2996 will be used.
 

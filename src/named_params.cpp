@@ -1,6 +1,7 @@
 #include <experimental/meta>
 #include <initializer_list>
 #include <print>
+#include <memory>
 
 template<std::size_t N>
 struct fixed_string {
@@ -66,15 +67,18 @@ constexpr auto param(T&& value)
    return param_struct<name, decltype(std::forward<T>(value))>{std::forward<T>(value)};
 }
 
+template<typename... T>
+struct TD;
+
 template<std::meta::info Info, typename... ParamTypes>
 constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 {
    static_assert(sizeof...(ParamTypes) == std::meta::parameters_of(Info).size());
-   static constexpr auto max_size = std::ranges::max({std::remove_cvref_t<decltype(args)>::name.size...});
+   static constexpr auto max_size = std::ranges::max({std::remove_cvref_t<ParamTypes>::name.size...});
    static constexpr auto param_mapping = [&]() {
       std::array<std::size_t, sizeof...(ParamTypes)> to_ret;
       std::size_t loc = 0;
-      [:expand(std::initializer_list<fixed_string<max_size>>{std::remove_cvref_t<decltype(args)>::name...}):] >> [&]<auto Name> {
+      [:expand(std::initializer_list<fixed_string<max_size>>{std::remove_cvref_t<ParamTypes>::name...}):] >> [&]<auto Name> {
          static constexpr int name_index = []() {
             const auto params = std::meta::parameters_of(Info);
             const auto param_loc = std::ranges::find(params, Name.view(), std::meta::identifier_of);
@@ -89,18 +93,18 @@ constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 
    auto tuple_params = std::forward_as_tuple(std::forward_like<ParamTypes>(args.value)...);
    const auto get_tuple_params = [&]<std::size_t... I>(const std::index_sequence<I...>) {
-      return std::forward_as_tuple(std::get<param_mapping[I]>(tuple_params)...);
+      return std::forward_as_tuple(std::get<param_mapping[I]>(std::forward_like<ParamTypes>(tuple_params))...);
    };
 
    return std::apply([:Info:], get_tuple_params(std::make_index_sequence<param_mapping.size()>{}));
 }
 
-void test(int a, int b, int see)
+void test(int a, int b, int see, std::unique_ptr<int> ptr)
 {
-   std::println("a = {}, b = {}, see = {}", a, b, see);
+   std::println("a = {}, b = {}, see = {}, *ptr = {}", a, b, see, *ptr);
 }
 
 int main()
 {
-   call_with_param_names<^test>(param<"see">(3), param<"a">(1), param<"b">(2));
+   call_with_param_names<^test>(param<"see">(3), param<"a">(1), param<"ptr">(std::make_unique<int>(3)), param<"b">(2));
 }
