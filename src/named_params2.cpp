@@ -24,8 +24,8 @@ inline static constexpr bool is_named_param = false;
 template<fixed_string Name, typename T>
 inline static constexpr bool is_named_param<param_struct<Name, T>> = true;
 
-template<std::meta::info Info, std::size_t StartOffset, fixed_string... Names>
-consteval auto get_param_mapping()
+template<std::meta::info Info, fixed_string... Names>
+consteval auto get_param_mapping(std::size_t start_offset)
 {
    static constexpr auto max_size = std::ranges::max({Names.size...});
    std::array<std::size_t, sizeof...(Names)> to_ret;
@@ -37,7 +37,7 @@ consteval auto get_param_mapping()
          return std::ranges::distance(params.begin(), param_loc);
       }();
       static_assert(name_index != std::meta::parameters_of(Info).size(), "Illegal parameter name");
-      to_ret[name_index - StartOffset] = loc;
+      to_ret[name_index - start_offset] = loc;
       loc += 1;
    };
    return to_ret;
@@ -80,7 +80,9 @@ constexpr decltype(auto) call_with_param_names_impl(Self&& self, ParamTypes&&...
       return std::forward_as_tuple(std::forward<ParamTypes...[I]>(args...[I])...);
    };
    const auto get_named_params = [&]<std::size_t... I>(std::index_sequence<I...>) {
-      static constexpr auto param_mapping = get_param_mapping<Info, first_named_param, ParamTypes...[I] ::name...>();
+      // clang-format off
+      static constexpr auto param_mapping = get_param_mapping<Info, ParamTypes...[I]::name...>(first_named_param);
+      // clang-format on
       return get_tuple_params<param_mapping>(std::forward_like<ParamTypes...[I]>(args...[I].value)...);
    };
 
