@@ -51,18 +51,17 @@ constexpr auto get_tuple_params(ParamTypes&&... args)
    }(std::make_index_sequence<sizeof...(ParamTypes)>{});
 }
 
-template<std::size_t Low, std::size_t High>
-consteval std::meta::info make_index_seq_impl()
+consteval std::meta::info make_index_seq_impl(std::size_t low, std::size_t high)
 {
    std::vector<std::meta::info> indicies;
-   for (std::size_t i = Low; i < High; ++i) {
+   for (std::size_t i = low; i < high; ++i) {
       indicies.push_back(std::meta::reflect_value(i));
    }
    return std::meta::substitute(^std::index_sequence, indicies);
 }
 
 template<std::size_t Low, std::size_t High>
-using make_index_seq = [:make_index_seq_impl<Low, High>():];
+using make_index_seq = [:make_index_seq_impl(Low, High):];
 
 template<std::meta::info Info, typename Self, typename... ParamTypes>
 constexpr decltype(auto) call_with_param_names_impl(Self&& self, ParamTypes&&... args)
@@ -107,8 +106,7 @@ template<std::meta::info Info, typename... ParamTypes>
    requires(std::meta::is_function(Info))
 constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
 {
-   if constexpr (
-      std::meta::is_function(Info) && std::meta::is_class_member(Info) && !std::meta::is_static_member(Info)) {
+   if constexpr (std::meta::is_class_member(Info) && !std::meta::is_static_member(Info)) {
       // Member function
       static_assert(std::convertible_to<
                     std::add_lvalue_reference_t<std::remove_cvref_t<ParamTypes...[0]>>,
@@ -129,8 +127,11 @@ struct s {
    void func(int a, int b, int c) { std::println("in s::func with a = {}, b = {}, c = {}", a, b, c); }
 };
 
+constexpr int add(int lhs, int rhs) { return lhs + rhs; }
+
 int main()
 {
    call_with_param_names<^func>(10, param<"c">(30), param<"b">(20));
    call_with_param_names<^s::func>(s{}, 10, 20, param<"c">(30));
+   static_assert(call_with_param_names<^add>(param<"rhs">(20), param<"lhs">(10)) == 30);
 }
