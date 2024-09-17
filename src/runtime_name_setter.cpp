@@ -15,8 +15,8 @@ template<typename SetIn, typename T>
 consteval bool can_set_with_type()
 {
    bool can_set = false;
-   [:expand(std::meta::nonstatic_data_members_of(^SetIn)):] >> [&]<auto mem> {
-      if (std::meta::type_is_assignable(std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^T)) {
+   [:expand(std::meta::nonstatic_data_members_of(^^SetIn)):] >> [&]<auto mem> {
+      if (std::meta::type_is_assignable(std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
          can_set = true;
       }
    };
@@ -28,10 +28,10 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
 {
    static_assert(can_set_with_type<SetIn, T>(), "No members can be assigned to T's type.");
    bool was_set = false;
-   [:expand(std::meta::nonstatic_data_members_of(^SetIn)):] >> [&]<auto mem> {
+   [:expand(std::meta::nonstatic_data_members_of(^^SetIn)):] >> [&]<auto mem> {
       if (!was_set && std::meta::identifier_of(mem) == name) {
          if constexpr (std::meta::type_is_assignable(
-                          std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^T)) {
+                          std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
             set_in.[:mem:] = std::forward<T>(set_value);
             was_set = true;
          }
@@ -43,7 +43,7 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
 template<typename T>
 consteval std::meta::info get_variant_of_unique_types() noexcept
 {
-   const auto members = std::meta::nonstatic_data_members_of(std::meta::type_remove_reference(^T));
+   const auto members = std::meta::nonstatic_data_members_of(std::meta::type_remove_reference(^^T));
    std::vector<std::meta::info> unique_members;
    for (const auto& mem : members) {
       const auto type = std::meta::type_of(mem);
@@ -51,7 +51,7 @@ consteval std::meta::info get_variant_of_unique_types() noexcept
          unique_members.push_back(type);
       }
    }
-   return std::meta::substitute(^std::variant, unique_members);
+   return std::meta::substitute(^^std::variant, unique_members);
 }
 
 template<typename T>
@@ -105,7 +105,7 @@ constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
       // clang-format on
       using ret_type = std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
       ret_type to_ret{};
-      [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
+      [:expand(std::meta::nonstatic_data_members_of(^^T)):] >> [&]<auto mem> {
          if (std::meta::identifier_of(mem) == name) {
             to_ret = &get_from.[:mem:];
          }
@@ -121,7 +121,7 @@ constexpr auto get_by_name(const T& get_from, std::string_view name) noexcept
       // clang-format on
       using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
       ret_type to_ret{};
-      [:expand(std::meta::nonstatic_data_members_of(^T)):] >> [&]<auto mem> {
+      [:expand(std::meta::nonstatic_data_members_of(^^T)):] >> [&]<auto mem> {
          if (std::meta::identifier_of(mem) == name) {
             to_ret = &get_from.[:mem:];
          }
@@ -149,7 +149,7 @@ template<typename T>
 void print_named_value(std::string_view name, const T& value, std::string_view equals = "==") noexcept
 {
    if (!name.empty()) {
-      std::print("{}: {} ", name, std::meta::display_string_of(^T));
+      std::print("{}: {} ", name, std::meta::display_string_of(^^T));
    }
 
    if constexpr (std::same_as<const char*, T>) {
@@ -191,7 +191,7 @@ consteval std::meta::info make_min_size() noexcept
 {
    struct min_size;
 
-   const auto mems = std::meta::nonstatic_data_members_of(^T);
+   const auto mems = std::meta::nonstatic_data_members_of(^^T);
    for (const auto& mem : mems) {
       assert(!std::meta::is_bit_field(mem) && "Bitfield members are not supported");
    }
@@ -214,7 +214,7 @@ consteval std::meta::info make_min_size() noexcept
           .no_unique_address = true});
    });
 
-   return std::meta::define_class(^min_size, opts);
+   return std::meta::define_class(^^min_size, opts);
 }
 
 template<typename T>
@@ -300,7 +300,7 @@ int main()
            std::println("");
         }},
        {"view_all", [](values& vals, const std::vector<std::string_view>& args) {
-           [:expand(std::meta::nonstatic_data_members_of(^values)):] >> [&]<auto mem> {
+           [:expand(std::meta::nonstatic_data_members_of(^^values)):] >> [&]<auto mem> {
               std::print("   ");
               print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
               std::println("");

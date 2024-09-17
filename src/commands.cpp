@@ -31,9 +31,9 @@ constexpr auto get_type_alias_names() noexcept
    using func_ptr = void (*)(const std::vector<std::string_view>&);
    std::vector<std::pair<std::string_view, func_ptr>> to_ret;
    static constexpr auto func = []<std::meta::info Mem>(const std::vector<std::string_view>& args) static {
-      static constexpr auto func_type = ^[:Mem:] ::func;
+      static constexpr auto func_type = ^^[:Mem:] ::func;
       static constexpr auto func_value = std::meta::value_of(func_type);
-      static constexpr auto func_refl = ^decltype([:func_value:])::operator();
+      static constexpr auto func_refl = ^^decltype([:func_value:])::operator();
       static constexpr auto num_params = std::meta::parameters_of(func_refl).size();
       if (num_params != args.size() - 1) {
          std::println(
@@ -44,7 +44,7 @@ constexpr auto get_type_alias_names() noexcept
       std::ranges::copy(args.begin() + 1, args.end(), to_call_with.begin());
       std::apply([:Mem:] ::func, to_call_with);
    };
-   [:expand(std::meta::members_of(Info) | std::views::filter(std::meta::is_alias)):]
+   [:expand(std::meta::members_of(Info) | std::views::filter(std::meta::is_type_alias)):]
       >> [&]<auto Mem> { to_ret.emplace_back(std::meta::identifier_of(Mem), &func.template operator()<Mem>); };
    return to_ret;
 }
@@ -96,7 +96,7 @@ struct commands<void> {
    void execute(this const Self& self, std::string_view line) noexcept
    {
       const auto args = split_by_whitespace(line);
-      const auto command_names = get_type_alias_names<^Self>();
+      const auto command_names = get_type_alias_names<^^Self>();
       if (args.size() == 0) {
          std::println("Error: No command given.");
          return;
@@ -105,15 +105,16 @@ struct commands<void> {
       if (loc == command_names.end()) {
          if (args[0] == "help") {
             std::println("   Commands and arguments:");
-            [:expand(std::meta::members_of(^Self) | std::views::filter(std::meta::is_alias)):] >> [&]<auto Alias> {
-               static constexpr auto func_type = ^[:Alias:] ::func;
-               static constexpr auto func_value = std::meta::value_of(func_type);
-               static constexpr auto func_refl = ^decltype([:func_value:])::operator();
-               std::print("      {}", std::meta::identifier_of(Alias));
-               [:expand(std::meta::parameters_of(func_refl)):]
-                  >> [&]<auto Param> { std::print(" {}", std::meta::identifier_of(Param)); };
-               std::print("\n");
-            };
+            [:expand(std::meta::members_of(^^Self) | std::views::filter(std::meta::is_type_alias)):]
+               >> [&]<auto Alias> {
+                    static constexpr auto func_type = ^^[:Alias:] ::func;
+                    static constexpr auto func_value = std::meta::value_of(func_type);
+                    static constexpr auto func_refl = ^^decltype([:func_value:])::operator();
+                    std::print("      {}", std::meta::identifier_of(Alias));
+                    [:expand(std::meta::parameters_of(func_refl)):]
+                       >> [&]<auto Param> { std::print(" {}", std::meta::identifier_of(Param)); };
+                    std::print("\n");
+                 };
             return;
          }
          else {

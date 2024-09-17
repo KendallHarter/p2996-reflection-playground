@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Just assume Clang
-add_compile_options(-stdlib=libc++ -std=c++26 -freflection -fparameter-reflection)
+add_compile_options(-stdlib=libc++ -freflection-latest)
 add_link_options(-stdlib=libc++)
 
 add_executable(commands src/commands.cpp)

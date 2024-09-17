@@ -50,7 +50,7 @@ consteval auto expand(R range)
    for (auto r : range) {
       args.push_back(std::meta::reflect_value(r));
    }
-   return std::meta::substitute(^__impl::replicator, args);
+   return std::meta::substitute(^^__impl::replicator, args);
 }
 
 #endif // COMMON_HPP

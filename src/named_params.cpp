@@ -112,8 +112,8 @@ struct derived : s {};
 
 int main()
 {
-   call_with_param_names<^test>(param<"see">(3), param<"a">(1), param<"ptr">(std::make_unique<int>(3)), param<"b">(2));
-   call_with_param_names<^s::func2>(param<"c">(10), param<"b">(5));
-   call_with_param_names<^s::func>(s{}, param<"x">(40));
-   call_with_param_names<^s::func>(derived{}, param<"x">(20));
+   call_with_param_names<^^test>(param<"see">(3), param<"a">(1), param<"ptr">(std::make_unique<int>(3)), param<"b">(2));
+   call_with_param_names<^^s::func2>(param<"c">(10), param<"b">(5));
+   call_with_param_names<^^s::func>(s{}, param<"x">(40));
+   call_with_param_names<^^s::func>(derived{}, param<"x">(20));
 }

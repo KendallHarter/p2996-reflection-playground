@@ -57,7 +57,7 @@ consteval std::meta::info make_index_seq_impl(std::size_t low, std::size_t high)
    for (std::size_t i = low; i < high; ++i) {
       indicies.push_back(std::meta::reflect_value(i));
    }
-   return std::meta::substitute(^std::index_sequence, indicies);
+   return std::meta::substitute(^^std::index_sequence, indicies);
 }
 
 template<std::size_t Low, std::size_t High>
@@ -131,7 +131,7 @@ constexpr int add(int lhs, int rhs) { return lhs + rhs; }
 
 int main()
 {
-   call_with_param_names<^func>(10, param<"c">(30), param<"b">(20));
-   call_with_param_names<^s::func>(s{}, 10, 20, param<"c">(30));
-   static_assert(call_with_param_names<^add>(param<"rhs">(20), param<"lhs">(10)) == 30);
+   call_with_param_names<^^func>(10, param<"c">(30), param<"b">(20));
+   call_with_param_names<^^s::func>(s{}, 10, 20, param<"c">(30));
+   static_assert(call_with_param_names<^^add>(param<"rhs">(20), param<"lhs">(10)) == 30);
 }
