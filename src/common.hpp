@@ -29,7 +29,7 @@ struct fixed_string {
    char storage_[N];
 };
 
-namespace __impl {
+namespace impl {
 template<auto... vals>
 struct replicator_type {
    template<typename F>
@@ -41,7 +41,7 @@ struct replicator_type {
 
 template<auto... vals>
 replicator_type<vals...> replicator = {};
-} // namespace __impl
+} // namespace impl
 
 template<typename R>
 consteval auto expand(R range)
@@ -50,7 +50,7 @@ consteval auto expand(R range)
    for (auto r : range) {
       args.push_back(std::meta::reflect_value(r));
    }
-   return std::meta::substitute(^^__impl::replicator, args);
+   return std::meta::substitute(^^impl::replicator, args);
 }
 
 #endif // COMMON_HPP
