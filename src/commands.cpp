@@ -115,14 +115,14 @@ struct commands<void> {
                        >> [&]<auto Param> { std::print(" {}", std::meta::identifier_of(Param)); };
                     std::print("\n");
                  };
-            return;
          }
          else {
             std::println("Error: No command {}.", args[0]);
-            return;
          }
       }
-      loc->second(args);
+      else {
+         loc->second(args);
+      }
    }
 };
 
