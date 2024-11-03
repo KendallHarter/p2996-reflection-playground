@@ -135,15 +135,15 @@ consteval bool has_annotation(std::meta::info info, const T& to_check)
    return false;
 }
 
+// Can't query annotations of a constructor template so this only works for non-templated constructors
 template<typename ToConstruct, typename... ParamTypes>
    requires(std::is_class_v<ToConstruct>)
-[[nodiscard]] constexpr ToConstruct named_construct_class(ParamTypes&&... args)
+[[nodiscard]] constexpr ToConstruct named_construct(ParamTypes&&... args)
 {
    static constexpr auto constructor = []() {
       const auto named_constructor_range
-         = std::meta::members_of(^^ToConstruct) | std::views::filter([](const auto& info) {
-              return std::meta::is_constructor(info) || std::meta::is_constructor_template(info);
-           })
+         = std::meta::members_of(^^ToConstruct)
+         | std::views::filter([](const auto& info) { return std::meta::is_constructor(info); })
          | std::views::filter([](const auto& info) { return has_annotation(info, named_constructor); })
          | std::ranges::to<std::vector>();
       assert(std::ranges::distance(named_constructor_range) == 1);
@@ -185,7 +185,9 @@ template<typename ToConstruct, typename... ParamTypes>
 void func(int a, int b, int c) { std::println("in func with a = {}, b = {}, c = {}", a, b, c); }
 
 struct s {
-   [[= named_constructor]] s(int a, int b, int c) { std::println("in s::s with a = {}, b = {}, c = {}", a, b, c); }
+   // clang-format off
+   [[=named_constructor]] s(int a, int b, int c) { std::println("in s::s with a = {}, b = {}, c = {}", a, b, c); }
+   // clang-format on
 
    s() {}
 
@@ -199,5 +201,5 @@ int main()
    call_with_param_names<^^func>(10, param<"c">(30), param<"b">(20));
    call_with_param_names<^^s::func>(s{}, 10, 20, param<"c">(30));
    static_assert(call_with_param_names<^^add>(param<"rhs">(20), param<"lhs">(10)) == 30);
-   [[maybe_unused]] const auto my_s = named_construct_class<s>(10, param<"c">(30), param<"b">(20));
+   [[maybe_unused]] const auto my_s = named_construct<s>(10, param<"c">(30), param<"b">(20));
 }
