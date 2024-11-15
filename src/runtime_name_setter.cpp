@@ -16,7 +16,7 @@ consteval bool can_set_with_type()
 {
    bool can_set = false;
    [:expand(std::meta::nonstatic_data_members_of(^^SetIn)):] >> [&]<auto mem> {
-      if (std::meta::type_is_assignable(std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
+      if (std::meta::is_assignable_type(std::meta::add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
          can_set = true;
       }
    };
@@ -30,8 +30,7 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
    bool was_set = false;
    [:expand(std::meta::nonstatic_data_members_of(^^SetIn)):] >> [&]<auto mem> {
       if (!was_set && std::meta::identifier_of(mem) == name) {
-         if constexpr (std::meta::type_is_assignable(
-                          std::meta::type_add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
+         if constexpr (std::meta::is_assignable_type(std::meta::add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
             set_in.[:mem:] = std::forward<T>(set_value);
             was_set = true;
          }
@@ -43,7 +42,7 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
 template<typename T>
 consteval std::meta::info get_variant_of_unique_types() noexcept
 {
-   const auto members = std::meta::nonstatic_data_members_of(std::meta::type_remove_reference(^^T));
+   const auto members = std::meta::nonstatic_data_members_of(std::meta::remove_reference(^^T));
    std::vector<std::meta::info> unique_members;
    for (const auto& mem : members) {
       const auto type = std::meta::type_of(mem);
@@ -214,7 +213,7 @@ consteval std::meta::info make_min_size() noexcept
           .no_unique_address = true});
    });
 
-   return std::meta::define_class(^^min_size, opts);
+   return std::meta::define_aggregate(^^min_size, opts);
 }
 
 template<typename T>
