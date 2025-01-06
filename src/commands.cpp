@@ -44,7 +44,9 @@ constexpr auto get_type_alias_names() noexcept
       std::ranges::copy(args.begin() + 1, args.end(), to_call_with.begin());
       std::apply([:Mem:] ::func, to_call_with);
    };
-   [:expand(std::meta::members_of(Info) | std::views::filter(std::meta::is_type_alias)):]
+   [:expand(
+        std::meta::members_of(Info, std::meta::access_context::unchecked())
+        | std::views::filter(std::meta::is_type_alias)):]
       >> [&]<auto Mem> { to_ret.emplace_back(std::meta::identifier_of(Mem), &func.template operator()<Mem>); };
    return to_ret;
 }
@@ -105,7 +107,9 @@ struct commands<void> {
       if (loc == command_names.end()) {
          if (args[0] == "help") {
             std::println("   Commands and arguments:");
-            [:expand(std::meta::members_of(^^Self) | std::views::filter(std::meta::is_type_alias)):]
+            [:expand(
+                 std::meta::members_of(^^Self, std::meta::access_context::unchecked())
+                 | std::views::filter(std::meta::is_type_alias)):]
                >> [&]<auto Alias> {
                     static constexpr auto func_type = ^^[:Alias:] ::func;
                     static constexpr auto func_value = std::meta::value_of(func_type);

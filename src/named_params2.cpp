@@ -142,7 +142,7 @@ template<typename ToConstruct, typename... ParamTypes>
 {
    static constexpr auto constructor = []() {
       const auto named_constructor_range
-         = std::meta::members_of(^^ToConstruct)
+         = std::meta::members_of(^^ToConstruct, std::meta::access_context::unchecked())
          | std::views::filter([](const auto& info) { return std::meta::is_constructor(info); })
          | std::views::filter([](const auto& info) { return has_annotation(info, named_constructor); })
          | std::ranges::to<std::vector>();
