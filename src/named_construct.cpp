@@ -80,7 +80,8 @@ template<typename ToConstruct, typename... ParamTypes>
    requires(std::is_class_v<ToConstruct>)
 [[nodiscard]] constexpr ToConstruct named_construct(ParamTypes&&... args)
 {
-   static constexpr auto constructors = []() {
+   // dumb two step process because define_static_array is being removed
+   static constexpr auto constructors_size = []() {
       const auto named_constructor_range
          = std::meta::members_of(^^ToConstruct, std::meta::access_context::unchecked())
          | std::views::filter([](const auto& info) {
@@ -89,7 +90,19 @@ template<typename ToConstruct, typename... ParamTypes>
          | std::views::filter(
               [](const auto& info) { return std::meta::parameters_of(info).size() == sizeof...(ParamTypes); })
          | std::ranges::to<std::vector>();
-      return std::meta::define_static_array(named_constructor_range);
+      return named_constructor_range.size();
+   }();
+   static constexpr auto constructors = []() {
+      auto named_constructor_range
+         = std::meta::members_of(^^ToConstruct, std::meta::access_context::unchecked())
+         | std::views::filter([](const auto& info) {
+              return std::meta::is_constructor(info) || std::meta::is_constructor_template(info);
+           })
+         | std::views::filter(
+              [](const auto& info) { return std::meta::parameters_of(info).size() == sizeof...(ParamTypes); });
+      std::array<std::meta::info, constructors_size> to_ret;
+      std::ranges::copy(named_constructor_range, to_ret.begin());
+      return to_ret;
    }();
 
    static constexpr std::array<bool, sizeof...(ParamTypes)> is_named{is_named_param<ParamTypes>...};
