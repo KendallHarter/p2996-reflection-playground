@@ -30,10 +30,11 @@ consteval auto get_param_mapping(std::size_t start_offset)
    static constexpr auto max_size = std::ranges::max({Names.size...});
    std::array<std::size_t, sizeof...(Names)> to_ret;
    std::size_t loc = 0;
-   [:expand(std::initializer_list<fixed_string<max_size>>{Names...}):] >> [&]<auto Name> {
-      static constexpr std::size_t name_index = []() {
+   template for (constexpr auto name : std::to_array<fixed_string<max_size>>({Names...}))
+   {
+      static constexpr std::size_t name_index = [&]() {
          const auto params = std::meta::parameters_of(Info);
-         const auto param_loc = std::ranges::find(params, Name.view(), std::meta::identifier_of);
+         const auto param_loc = std::ranges::find(params, name.view(), std::meta::identifier_of);
          return std::ranges::distance(params.begin(), param_loc);
       }();
       static_assert(name_index != std::meta::parameters_of(Info).size(), "Illegal parameter name");

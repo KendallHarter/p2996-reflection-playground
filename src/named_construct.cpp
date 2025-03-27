@@ -32,10 +32,11 @@ consteval std::optional<std::array<std::size_t, sizeof...(Names)>> get_param_map
    std::array<std::size_t, sizeof...(Names)> to_ret;
    std::size_t loc = 0;
    bool valid = true;
-   [:expand(std::initializer_list<fixed_string<max_size>>{Names...}):] >> [&]<auto Name> {
-      static constexpr std::size_t name_index = []() {
+   template for (constexpr auto name : std::to_array<fixed_string<max_size>>({Names...}))
+   {
+      static constexpr std::size_t name_index = [&]() {
          const auto params = std::meta::parameters_of(Info);
-         const auto param_loc = std::ranges::find(params, Name.view(), std::meta::identifier_of);
+         const auto param_loc = std::ranges::find(params, name.view(), std::meta::identifier_of);
          return std::ranges::distance(params.begin(), param_loc);
       }();
       if (name_index == std::meta::parameters_of(Info).size()) {
@@ -122,10 +123,10 @@ template<typename ToConstruct, typename... ParamTypes>
          // clang-format off
          std::array<std::optional<std::array<std::size_t, sizeof...(I)>>, constructors.size()> to_ret;
          std::size_t i = 0;
-         [:expand(constructors):] >> [&]<std::meta::info Constructor>() {
-            to_ret[i] = get_param_mapping<Constructor, ParamTypes...[I]::name...>(first_named_param);
+         template for(constexpr auto constructor : constructors) {
+            to_ret[i] = get_param_mapping<constructor, ParamTypes...[I]::name...>(first_named_param);
             ++i;
-         };
+         }
          // clang-format on
          return to_ret;
       }();
