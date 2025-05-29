@@ -32,8 +32,8 @@ constexpr auto get_type_alias_names() noexcept
    std::vector<std::pair<std::string_view, func_ptr>> to_ret;
    static constexpr auto func = []<std::meta::info Mem>(const std::vector<std::string_view>& args) static {
       static constexpr auto func_type = ^^[:Mem:] ::func;
-      static constexpr auto func_value = std::meta::value_of(func_type);
-      static constexpr auto func_refl = ^^decltype([:func_value:])::operator();
+      static constexpr auto func_value = std::meta::constant_of(func_type);
+      static constexpr auto func_refl = ^^std::remove_cvref_t<decltype([:func_value:])>::operator();
       static constexpr auto num_params = std::meta::parameters_of(func_refl).size();
       if (num_params != args.size() - 1) {
          std::println(
@@ -81,7 +81,7 @@ struct commands {
 
 template<typename... U>
    requires(std::same_as<U, std::string_view> && ...)
-using ptr_fun = void(*)(const U&...);
+using ptr_fun = void (*)(const U&...);
 
 template<auto P>
 struct command_ptr {
@@ -112,8 +112,8 @@ struct commands<void> {
                  | std::views::filter(std::meta::is_type_alias)):]
                >> [&]<auto Alias> {
                     static constexpr auto func_type = ^^[:Alias:] ::func;
-                    static constexpr auto func_value = std::meta::value_of(func_type);
-                    static constexpr auto func_refl = ^^decltype([:func_value:])::operator();
+                    static constexpr auto func_value = std::meta::constant_of(func_type);
+                    static constexpr auto func_refl = ^^std::remove_cvref_t<decltype([:func_value:])>::operator();
                     std::print("      {}", std::meta::identifier_of(Alias));
                     [:expand(std::meta::parameters_of(func_refl)):]
                        >> [&]<auto Param> { std::print(" {}", std::meta::identifier_of(Param)); };

@@ -48,7 +48,7 @@ consteval auto expand(R range)
 {
    std::vector<std::meta::info> args;
    for (auto r : range) {
-      args.push_back(std::meta::reflect_value(r));
+      args.push_back(std::meta::reflect_constant(r));
    }
    return std::meta::substitute(^^impl::replicator, args);
 }

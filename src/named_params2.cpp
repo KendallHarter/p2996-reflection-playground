@@ -56,7 +56,7 @@ consteval std::meta::info make_index_seq_impl(std::size_t low, std::size_t high)
 {
    std::vector<std::meta::info> indicies;
    for (std::size_t i = low; i < high; ++i) {
-      indicies.push_back(std::meta::reflect_value(i));
+      indicies.push_back(std::meta::reflect_constant(i));
    }
    return std::meta::substitute(^^std::index_sequence, indicies);
 }
@@ -129,7 +129,7 @@ template<typename T>
 consteval bool has_annotation(std::meta::info info, const T& to_check)
 {
    for (const auto& annotation : std::meta::annotations_of(info)) {
-      if (std::meta::value_of(annotation) == std::meta::reflect_value(to_check)) {
+      if (std::meta::constant_of(annotation) == std::meta::reflect_constant(to_check)) {
          return true;
       }
    }

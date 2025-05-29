@@ -65,7 +65,7 @@ consteval std::meta::info make_index_seq_impl(std::size_t low, std::size_t high)
 {
    std::vector<std::meta::info> indicies;
    for (std::size_t i = low; i < high; ++i) {
-      indicies.push_back(std::meta::reflect_value(i));
+      indicies.push_back(std::meta::reflect_constant(i));
    }
    return std::meta::substitute(^^std::index_sequence, indicies);
 }
