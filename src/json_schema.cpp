@@ -81,15 +81,53 @@ consteval auto get_def_names(const std::string_view schema)
    return ::define_static_array(names);
 }
 
-template<fixed_string Prefix, fixed_string JsonSchema>
+consteval std::vector<std::meta::info> parse_schema_type(json_map definition);
+
+consteval std::meta::info parse_single_schema_type(
+   std::string_view prop_name, json_map prop_desc, const std::vector<std::string_view>& required_items)
+{
+   const auto type = std::get<std::string_view>(get_by_key(prop_desc, "type"));
+   if (std::ranges::find(required_items, prop_name) == required_items.end()) {
+      return std::meta::data_member_spec(
+         std::meta::substitute(^^std::optional, {get_by_key(type_mapping, type)}), {.name = prop_name});
+   }
+   else {
+      return std::meta::data_member_spec(get_by_key(type_mapping, type), {.name = prop_name});
+   }
+}
+
+consteval std::vector<std::meta::info> parse_schema_type(json_map definition)
+{
+   std::vector<std::meta::info> members;
+   // neither std::views::transform nor std::ranges::transform were working...
+   // const auto required_items
+   //    = std::get<json_array>(get_by_key(cur_def, "required"))
+   //    | std::views::transform([](const auto& x) { return std::get<std::string_view>(x); })
+   //    | std::ranges::to<std::vector>();
+   const std::vector required_items = [&]() {
+      const auto required = std::get<json_array>(get_by_key(definition, "required"));
+      std::vector<std::string_view> to_ret;
+      for (const auto& member : required) {
+         to_ret.push_back(std::get<std::string_view>(member));
+      }
+      return to_ret;
+   }();
+   const auto properties = std::get<json_map>(get_by_key(definition, "properties"));
+   for (const auto& [prop_name, prop_desc] : properties) {
+      members.push_back(parse_single_schema_type(prop_name, std::get<json_map>(prop_desc), required_items));
+   }
+   return members;
+}
+
+template<fixed_string StructName, fixed_string DefPrefix, fixed_string JsonSchema>
 consteval void define_schema_types()
 {
    // $defs should be optional, rather than a requirement
    constexpr auto longest_def_name = get_longest_def_name(JsonSchema.view());
    constexpr auto def_names = get_def_names<longest_def_name>(JsonSchema.view());
    // verify that all defs are objects (for now)
-   const auto parsed_schema = parse_json(JsonSchema.view());
-   const auto defs = std::get<json_map>(get_by_key(std::get<json_map>(parsed_schema), "$defs"));
+   const auto parsed_schema = std::get<json_map>(parse_json(JsonSchema.view()));
+   const auto defs = std::get<json_map>(get_by_key(parsed_schema, "$defs"));
    for (const auto& [name, value] : defs) {
       const auto def_info = std::get<json_map>(value);
       const auto type = std::get<std::string_view>(get_by_key(def_info, "type"));
@@ -98,40 +136,17 @@ consteval void define_schema_types()
    // Define each of the def types
    template for (constexpr auto name : def_names)
    {
-      constexpr auto full_name = append_fixed_strings<Prefix, name>();
+      constexpr auto full_name = append_fixed_strings<DefPrefix, name>();
       constexpr auto to_define = std::meta::substitute(^^json_schema_types, {std::meta::reflect_constant(full_name)});
       const auto cur_def = std::get<json_map>(get_by_key(defs, name.view()));
-      // neither std::views::transform nor std::ranges::transform were working...
-      // const auto required_items
-      //    = std::get<json_array>(get_by_key(cur_def, "required"))
-      //    | std::views::transform([](const auto& x) { return std::get<std::string_view>(x); })
-      //    | std::ranges::to<std::vector>();
-      const std::vector required_items = [&]() {
-         const auto required = std::get<json_array>(get_by_key(cur_def, "required"));
-         std::vector<std::string_view> to_ret;
-         for (const auto& member : required) {
-            to_ret.push_back(std::get<std::string_view>(member));
-         }
-         return to_ret;
-      }();
-      const auto properties = std::get<json_map>(get_by_key(cur_def, "properties"));
-      std::vector<std::meta::info> members;
-      for (const auto& [prop_name, prop_desc] : properties) {
-         const auto type = std::get<std::string_view>(get_by_key(std::get<json_map>(prop_desc), "type"));
-         if (std::ranges::find(required_items, prop_name) == required_items.end()) {
-            members.push_back(
-               std::meta::data_member_spec(
-                  std::meta::substitute(^^std::optional, {get_by_key(type_mapping, type)}), {.name = prop_name}));
-         }
-         else {
-            members.push_back(std::meta::data_member_spec(get_by_key(type_mapping, type), {.name = prop_name}));
-         }
-      }
-      std::meta::define_aggregate(to_define, members);
+      std::meta::define_aggregate(to_define, parse_schema_type(cur_def));
    }
+   // // Then the main type
+   // constexpr auto main_type = std::meta::substitute(^^json_schema_types, {std::meta::reflect_constant(StructName)});
+   // std::meta::define_aggregate(main_type, parse_schema_type(parsed_schema));
 }
 
-consteval { define_schema_types<"test_", basic_array_schema>(); }
+consteval { define_schema_types<"fruits_and_veggies", "test_", basic_array_schema>(); }
 
 constexpr auto x = json_schema_types<"test_veggie">{.veggieName = "hi", .veggieLike = false};
 
