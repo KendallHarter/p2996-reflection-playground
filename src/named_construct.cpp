@@ -31,7 +31,6 @@ consteval std::optional<std::array<std::size_t, sizeof...(Names)>> get_param_map
    static constexpr auto max_size = std::ranges::max({Names.size...});
    std::array<std::size_t, sizeof...(Names)> to_ret;
    std::size_t loc = 0;
-   bool valid = true;
    template for (constexpr auto name : std::to_array<fixed_string<max_size>>({Names...}))
    {
       static constexpr std::size_t name_index = [&]() {
@@ -40,17 +39,12 @@ consteval std::optional<std::array<std::size_t, sizeof...(Names)>> get_param_map
          return std::ranges::distance(params.begin(), param_loc);
       }();
       if (name_index == std::meta::parameters_of(Info).size()) {
-         valid = false;
+         return std::nullopt;
       }
       to_ret[name_index - start_offset] = loc;
       loc += 1;
    };
-   if (valid) {
-      return to_ret;
-   }
-   else {
-      return std::nullopt;
-   }
+   return to_ret;
 }
 
 template<std::array ParamMapping, typename... ParamTypes>
