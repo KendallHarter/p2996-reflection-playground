@@ -20,7 +20,7 @@ constexpr auto param(T&& value)
 template<std::meta::info Info, fixed_string... Names>
 consteval auto get_param_mapping()
 {
-   static constexpr auto max_size = std::ranges::max({Names.size...});
+   static constexpr auto max_size = std::ranges::max({Names.size()...});
    std::array<std::size_t, sizeof...(Names)> to_ret;
    std::size_t loc = 0;
    template for (constexpr auto name : std::to_array<fixed_string<max_size>>({Names...}))

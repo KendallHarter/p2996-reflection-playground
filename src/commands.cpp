@@ -44,7 +44,7 @@ constexpr auto get_type_alias_names() noexcept
       std::ranges::copy(args.begin() + 1, args.end(), to_call_with.begin());
       std::apply([:Mem:] ::func, to_call_with);
    };
-   static constexpr auto aliases = define_static_array(
+   static constexpr auto aliases = ::define_static_array(
       std::meta::members_of(Info, std::meta::access_context::unchecked())
       | std::views::filter(std::meta::is_type_alias));
    template for (constexpr auto alias : aliases)
@@ -110,7 +110,7 @@ struct commands<void> {
       if (loc == command_names.end()) {
          if (args[0] == "help") {
             std::println("   Commands and arguments:");
-            static constexpr auto aliases = define_static_array(
+            static constexpr auto aliases = ::define_static_array(
                std::meta::members_of(^^Self, std::meta::access_context::unchecked())
                | std::views::filter(std::meta::is_type_alias));
             template for (constexpr auto alias : aliases)
@@ -119,7 +119,7 @@ struct commands<void> {
                static constexpr auto func_value = std::meta::constant_of(func_type);
                static constexpr auto func_refl = ^^std::remove_cvref_t<decltype([:func_value:])>::operator();
                std::print("      {}", std::meta::identifier_of(alias));
-               static constexpr auto params = define_static_array(std::meta::parameters_of(func_refl));
+               static constexpr auto params = ::define_static_array(std::meta::parameters_of(func_refl));
                template for (constexpr auto param : params) { std::print(" {}", std::meta::identifier_of(param)); }
                std::print("\n");
             }

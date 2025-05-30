@@ -183,7 +183,7 @@ int main()
            std::println("");
         }},
        {"view_all", [](values& vals, const std::vector<std::string_view>& args) {
-           static constexpr auto nsdm = define_static_array(
+           static constexpr auto nsdm = ::define_static_array(
               std::meta::nonstatic_data_members_of(^^values, std::meta::access_context::unchecked()));
            template for (constexpr auto mem : nsdm)
            {

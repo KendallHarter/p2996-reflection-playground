@@ -12,6 +12,13 @@ struct fixed_string {
 
    constexpr fixed_string(const char (&val)[N]) noexcept { std::ranges::copy(val, storage_); }
 
+   template<std::ranges::input_range Range>
+      requires std::convertible_to<std::ranges::range_value_t<Range>, char>
+   constexpr fixed_string(Range&& r) noexcept : fixed_string{}
+   {
+      std::ranges::copy(r, storage_);
+   }
+
    template<std::size_t ToSize>
       requires(ToSize > N)
    constexpr operator fixed_string<ToSize>() const noexcept
@@ -21,14 +28,42 @@ struct fixed_string {
       return to_ret;
    }
 
-   friend bool operator==(const fixed_string&, const fixed_string&) = default;
+   friend constexpr bool operator==(const fixed_string& lhs, const fixed_string& rhs) = default;
 
    constexpr std::string_view view() const noexcept { return std::string_view{storage_}; }
 
-   inline static constexpr std::size_t size = N;
+   constexpr std::size_t size() const noexcept { return N; }
 
    char storage_[N];
 };
+
+template<fixed_string Str>
+consteval auto shrink_fixed_string()
+{
+   static constexpr auto end = std::ranges::distance(std::begin(Str.storage_), std::ranges::find(Str.storage_, '\0'));
+   return fixed_string<end + 1>{std::span<const char>(std::begin(Str.storage_), end + 1)};
+}
+
+template<fixed_string... Strs>
+consteval auto make_uniform_fixed_strings()
+{
+   static constexpr auto max_size = std::ranges::max({Strs.size()...});
+   return std::array<fixed_string<max_size>, sizeof...(Strs)>{Strs...};
+}
+
+template<fixed_string... Strs>
+consteval auto append_fixed_strings()
+{
+   // Subtract sizeof...(Strs) to remove the nulls, then append 1 for the final null
+   static constexpr auto size = (Strs.size() + ...) - sizeof...(Strs) + 1;
+   auto to_ret = fixed_string<size>{};
+   auto write_loc = std::begin(to_ret.storage_);
+   // if only std::concat was supported in Clang...
+   for (const auto& str : make_uniform_fixed_strings<Strs...>()) {
+      write_loc = std::ranges::copy(str.view(), write_loc).out;
+   }
+   return to_ret;
+}
 
 namespace impl {
 
@@ -42,7 +77,7 @@ consteval std::meta::info reflect_constant_array(R&& r)
 {
    auto args = std::vector<std::meta::info>{^^std::ranges::range_value_t<R>};
    for (auto&& elem : r) {
-      args.push_back(r);
+      args.push_back(std::meta::reflect_constant(elem));
    }
    return std::meta::substitute(^^impl::fixed_array, args);
 }

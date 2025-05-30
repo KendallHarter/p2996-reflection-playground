@@ -5,7 +5,7 @@ template<typename SetIn, typename T>
 consteval bool can_set_with_type()
 {
    static constexpr auto members
-      = define_static_array(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked()));
+      = ::define_static_array(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked()));
    template for (constexpr auto mem : members)
    {
       if (std::meta::is_assignable_type(std::meta::add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
@@ -20,7 +20,7 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
 {
    static_assert(can_set_with_type<SetIn, T>(), "No members can be assigned to T's type.");
    static constexpr auto members
-      = define_static_array(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked()));
+      = ::define_static_array(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked()));
    template for (constexpr auto mem : members)
    {
       if (std::meta::identifier_of(mem) == name) {
@@ -98,7 +98,7 @@ constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
    -> std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>> {
       // clang-format on
       static constexpr auto nsdm
-         = define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+         = ::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
       template for (constexpr auto mem : nsdm)
       {
          if (std::meta::identifier_of(mem) == name) {
@@ -116,7 +116,7 @@ constexpr auto get_by_name(const T& get_from, std::string_view name) noexcept
       // clang-format on
       using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
       static constexpr auto nsdm
-         = define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+         = ::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
       template for (constexpr auto mem : nsdm)
       {
          if (std::meta::identifier_of(mem) == name) {

@@ -28,7 +28,7 @@ inline static constexpr bool is_named_param<param_struct<Name, T>> = true;
 template<std::meta::info Info, fixed_string... Names>
 consteval std::optional<std::array<std::size_t, sizeof...(Names)>> get_param_mapping(std::size_t start_offset)
 {
-   static constexpr auto max_size = std::ranges::max({Names.size...});
+   static constexpr auto max_size = std::ranges::max({Names.size()...});
    std::array<std::size_t, sizeof...(Names)> to_ret;
    std::size_t loc = 0;
    template for (constexpr auto name : std::to_array<fixed_string<max_size>>({Names...}))
@@ -84,7 +84,7 @@ template<typename ToConstruct, typename... ParamTypes>
          | std::views::filter(
               [](const auto& info) { return std::meta::parameters_of(info).size() == sizeof...(ParamTypes); })
          | std::ranges::to<std::vector>();
-      return define_static_array(named_constructor_range);
+      return ::define_static_array(named_constructor_range);
    }();
 
    static constexpr std::array<bool, sizeof...(ParamTypes)> is_named{is_named_param<ParamTypes>...};
