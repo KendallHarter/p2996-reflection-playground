@@ -150,4 +150,4 @@ consteval { define_schema_types<"fruits_and_veggies", "test_", basic_array_schem
 
 constexpr auto x = json_schema_types<"test_veggie">{.veggieName = "hi", .veggieLike = false};
 
-int main() { ; }
+int main() {}
