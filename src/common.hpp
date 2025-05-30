@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <experimental/meta>
+#include <ranges>
 #include <string_view>
 
 template<std::size_t N>
@@ -41,7 +42,30 @@ struct replicator_type {
 
 template<auto... vals>
 replicator_type<vals...> replicator = {};
+
+template<typename T, T... Values>
+inline constexpr T fixed_array[sizeof...(Values)]{Values...};
 } // namespace impl
+
+template<std::ranges::input_range R>
+consteval std::meta::info reflect_constant_array(R&& r)
+{
+   auto args = std::vector<std::meta::info>{^^std::ranges::range_value_t<R>};
+   for (auto&& elem : r) {
+      args.push_back(r);
+   }
+   return std::meta::substitute(^^impl::fixed_array, args);
+}
+
+template<std::ranges::input_range R>
+consteval std::span<const std::ranges::range_value_t<R>> define_static_array(R&& r)
+{
+   using T = std::ranges::range_value_t<R>;
+
+   auto array = reflect_constant_array(r);
+
+   return {std::meta::extract<const T*>(array), std::meta::extent(std::meta::type_of(array))};
+}
 
 template<typename R>
 consteval auto expand(R range)
