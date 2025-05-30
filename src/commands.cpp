@@ -44,10 +44,13 @@ constexpr auto get_type_alias_names() noexcept
       std::ranges::copy(args.begin() + 1, args.end(), to_call_with.begin());
       std::apply([:Mem:] ::func, to_call_with);
    };
-   [:expand(
-        std::meta::members_of(Info, std::meta::access_context::unchecked())
-        | std::views::filter(std::meta::is_type_alias)):]
-      >> [&]<auto Mem> { to_ret.emplace_back(std::meta::identifier_of(Mem), &func.template operator()<Mem>); };
+   static constexpr auto aliases = define_static_array(
+      std::meta::members_of(Info, std::meta::access_context::unchecked())
+      | std::views::filter(std::meta::is_type_alias));
+   template for (constexpr auto alias : aliases)
+   {
+      to_ret.emplace_back(std::meta::identifier_of(alias), &func.template operator()<alias>);
+   }
    return to_ret;
 }
 
@@ -107,18 +110,19 @@ struct commands<void> {
       if (loc == command_names.end()) {
          if (args[0] == "help") {
             std::println("   Commands and arguments:");
-            [:expand(
-                 std::meta::members_of(^^Self, std::meta::access_context::unchecked())
-                 | std::views::filter(std::meta::is_type_alias)):]
-               >> [&]<auto Alias> {
-                    static constexpr auto func_type = ^^[:Alias:] ::func;
-                    static constexpr auto func_value = std::meta::constant_of(func_type);
-                    static constexpr auto func_refl = ^^std::remove_cvref_t<decltype([:func_value:])>::operator();
-                    std::print("      {}", std::meta::identifier_of(Alias));
-                    [:expand(std::meta::parameters_of(func_refl)):]
-                       >> [&]<auto Param> { std::print(" {}", std::meta::identifier_of(Param)); };
-                    std::print("\n");
-                 };
+            static constexpr auto aliases = define_static_array(
+               std::meta::members_of(^^Self, std::meta::access_context::unchecked())
+               | std::views::filter(std::meta::is_type_alias));
+            template for (constexpr auto alias : aliases)
+            {
+               static constexpr auto func_type = ^^[:alias:] ::func;
+               static constexpr auto func_value = std::meta::constant_of(func_type);
+               static constexpr auto func_refl = ^^std::remove_cvref_t<decltype([:func_value:])>::operator();
+               std::print("      {}", std::meta::identifier_of(alias));
+               static constexpr auto params = define_static_array(std::meta::parameters_of(func_refl));
+               template for (constexpr auto param : params) { std::print(" {}", std::meta::identifier_of(param)); }
+               std::print("\n");
+            }
          }
          else {
             std::println("Error: No command {}.", args[0]);

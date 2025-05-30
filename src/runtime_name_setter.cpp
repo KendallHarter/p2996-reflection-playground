@@ -15,11 +15,14 @@ template<typename SetIn, typename T>
 consteval bool can_set_with_type()
 {
    bool can_set = false;
-   [:expand(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked())):] >> [&]<auto mem> {
+   static constexpr auto members
+      = define_static_array(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked()));
+   template for (constexpr auto mem : members)
+   {
       if (std::meta::is_assignable_type(std::meta::add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
          can_set = true;
       }
-   };
+   }
    return can_set;
 }
 
@@ -28,14 +31,17 @@ constexpr bool set_by_name(SetIn& set_in, std::string_view name, T&& set_value) 
 {
    static_assert(can_set_with_type<SetIn, T>(), "No members can be assigned to T's type.");
    bool was_set = false;
-   [:expand(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked())):] >> [&]<auto mem> {
+   static constexpr auto members
+      = define_static_array(std::meta::nonstatic_data_members_of(^^SetIn, std::meta::access_context::unchecked()));
+   template for (constexpr auto mem : members)
+   {
       if (!was_set && std::meta::identifier_of(mem) == name) {
          if constexpr (std::meta::is_assignable_type(std::meta::add_lvalue_reference(std::meta::type_of(mem)), ^^T)) {
             set_in.[:mem:] = std::forward<T>(set_value);
             was_set = true;
          }
       }
-   };
+   }
    return was_set;
 }
 
@@ -105,11 +111,14 @@ constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
       // clang-format on
       using ret_type = std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
       ret_type to_ret{};
-      [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem> {
+      static constexpr auto nsdm
+         = define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+      template for (constexpr auto mem : nsdm)
+      {
          if (std::meta::identifier_of(mem) == name) {
             to_ret = &get_from.[:mem:];
          }
-      };
+      }
       return to_ret;
    }
 
@@ -121,11 +130,14 @@ constexpr auto get_by_name(const T& get_from, std::string_view name) noexcept
       // clang-format on
       using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
       ret_type to_ret{};
-      [:expand(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked())):] >> [&]<auto mem> {
+      static constexpr auto nsdm
+         = define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+      template for (constexpr auto mem : nsdm)
+      {
          if (std::meta::identifier_of(mem) == name) {
             to_ret = &get_from.[:mem:];
          }
-      };
+      }
       return to_ret;
    }
 
@@ -300,12 +312,14 @@ int main()
            std::println("");
         }},
        {"view_all", [](values& vals, const std::vector<std::string_view>& args) {
-           [:expand(std::meta::nonstatic_data_members_of(^^values, std::meta::access_context::unchecked())):]
-              >> [&]<auto mem> {
-                   std::print("   ");
-                   print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
-                   std::println("");
-                };
+           static constexpr auto nsdm = define_static_array(
+              std::meta::nonstatic_data_members_of(^^values, std::meta::access_context::unchecked()));
+           template for (constexpr auto mem : nsdm)
+           {
+              std::print("   ");
+              print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
+              std::println("");
+           };
         }}});
    static constexpr auto total_len
       = valid_commands.size()

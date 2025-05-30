@@ -31,20 +31,10 @@ struct fixed_string {
 };
 
 namespace impl {
-template<auto... vals>
-struct replicator_type {
-   template<typename F>
-   constexpr void operator>>(F body) const
-   {
-      (body.template operator()<vals>(), ...);
-   }
-};
-
-template<auto... vals>
-replicator_type<vals...> replicator = {};
 
 template<typename T, T... Values>
 inline constexpr T fixed_array[sizeof...(Values)]{Values...};
+
 } // namespace impl
 
 template<std::ranges::input_range R>
@@ -65,16 +55,6 @@ consteval std::span<const std::ranges::range_value_t<R>> define_static_array(R&&
    auto array = reflect_constant_array(r);
 
    return {std::meta::extract<const T*>(array), std::meta::extent(std::meta::type_of(array))};
-}
-
-template<typename R>
-consteval auto expand(R range)
-{
-   std::vector<std::meta::info> args;
-   for (auto r : range) {
-      args.push_back(std::meta::reflect_constant(r));
-   }
-   return std::meta::substitute(^^impl::replicator, args);
 }
 
 #endif // COMMON_HPP
