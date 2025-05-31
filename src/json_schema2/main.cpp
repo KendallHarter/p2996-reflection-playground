@@ -231,12 +231,7 @@ constexpr auto heck = root{.pain = {.sadness = 10.0}};
 
 const auto heck2 = veggies_and_fruits{
    .fruits = {"apple", "orange", "test"},
-   .vegetables = {{
-      .veggieName = "banana",
-      .veggieLike = true,
-      .additional_properties = {{"extra", "prop"}}
-   }
-   }};
+   .vegetables = {{.veggieName = "banana", .veggieLike = true, .additional_properties = {{"extra", "prop"}}}}};
 
 // ----------------------------------
 // - Testing section
