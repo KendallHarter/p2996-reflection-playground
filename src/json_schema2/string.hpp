@@ -17,7 +17,7 @@ template<std::size_t RawArraySize>
 struct string {
    consteval string() : value_{} {}
 
-   consteval string(const char (&c)[RawArraySize]) : value_{} { std::copy(c, c + RawArraySize, value_); }
+   consteval string(const char (&c)[RawArraySize]) : value_{} { std::ranges::copy(c, c + RawArraySize, value_); }
 
    // template<typename Range>
    //    requires std::convertible_to<std::ranges::range_value_t<Range>, char>
@@ -78,6 +78,12 @@ struct string {
    char value_[RawArraySize];
 
    friend constexpr bool operator==(const string& lhs, const string& rhs) noexcept { return lhs.view() == rhs.view(); }
+
+   template<std::size_t N>
+   friend constexpr auto operator<=>(const string& lhs, const string<N>& rhs) noexcept
+   {
+      return lhs.view() <=> rhs.view();
+   }
 };
 
 // I couldn't define this as a inline friend for some reason, unfortunately

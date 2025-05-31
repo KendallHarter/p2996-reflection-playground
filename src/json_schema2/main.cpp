@@ -2,6 +2,7 @@
 
 #include <experimental/meta>
 #include <stdexcept>
+#include <unordered_map>
 
 constexpr char basic_nested_schema[]{R"(
 {
@@ -15,10 +16,12 @@ constexpr char basic_nested_schema[]{R"(
                "type": "number"
             }
          },
-         "required": ["sadness"]
+         "required": ["sadness"],
+         "additionalProperties": false
       }
    },
-   "required": ["pain"]
+   "required": ["pain"],
+   "additionalProperties": false
 })"};
 
 constexpr char basic_array_schema[](R"(
@@ -55,6 +58,31 @@ constexpr char basic_array_schema[](R"(
 
 template<std::size_t N>
 using strc = khct::string<N>;
+
+struct additional_value
+   : std::variant<
+        std::int64_t,
+        std::string,
+        bool,
+        std::nullptr_t,
+        double,
+        std::unordered_map<std::string, additional_value>,
+        std::vector<additional_value>> {
+private:
+   using base = std::variant<
+      std::int64_t,
+      std::string,
+      bool,
+      std::nullptr_t,
+      double,
+      std::unordered_map<std::string, additional_value>,
+      std::vector<additional_value>>;
+
+public:
+   using base::base;
+};
+
+using additional_properties = std::unordered_map<std::string, additional_value>;
 
 template<khct::string name>
 struct json_schema_types;
@@ -105,6 +133,10 @@ consteval std::meta::info handle_object()
             std::meta::data_member_spec(
                handle_field<StructName, DefPrefix, props, true>(), {.name = name, .no_unique_address = true}));
       }
+   }
+   constexpr auto add_prop = Def.template get_key<strc{"additionalProperties"}>();
+   if constexpr (add_prop == khct::nil || add_prop == khct::true_) {
+      fields.push_back(std::meta::data_member_spec(^^additional_properties, {.name = "additional_properties"}));
    }
    constexpr auto to_define = std::meta::substitute(^^json_schema_types, {std::meta::reflect_constant(StructName)});
    return std::meta::define_aggregate(to_define, fields);
@@ -202,6 +234,39 @@ const auto heck2 = veggies_and_fruits{
    .vegetables = {{
       .veggieName = "banana",
       .veggieLike = true,
-   }}};
+      .additional_properties = {{"extra", "prop"}}
+   }
+   }};
+
+// ----------------------------------
+// - Testing section
+// ----------------------------------
+
+// template <typename T, T... Vs>
+// constexpr T fixed_str[sizeof...(Vs) + 1]{Vs..., '\0'};
+
+// consteval auto reflect_constant_string(std::string_view v) -> std::meta::info {
+//    auto args = std::vector<std::meta::info>{^^char};
+//    for (auto&& elem : v) {
+//       args.push_back(std::meta::reflect_constant(elem));
+//    }
+//    return std::meta::substitute(^^fixed_str, args);
+// }
+
+// template<khct::string name>
+// struct test_types;
+
+// consteval void tester(std::string_view v)
+// {
+//    const auto const_str = reflect_constant_string(v);
+//    const auto const_type = std::meta::substitute(^^test_types, {const_str});
+//    // const auto type = std::meta::substitute(^^test_types, {});
+//    // std::meta::define_aggregate(type, {^^int, {.name = v}});
+// }
+
+// consteval
+// {
+//    tester("hi");
+// }
 
 int main() {}

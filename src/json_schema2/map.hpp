@@ -72,7 +72,10 @@ template<
    requires(sizeof...(Values) == Size && std::is_empty_v<Comp>)
 struct multi_type_map {
 
-   template<Key KeyToFind>
+   template<auto KeyToFind>
+      requires weakly_equality_comparible_with<decltype(KeyToFind), Key> && requires(decltype(KeyToFind) k, Key k2) {
+         { k < k2 } -> std::convertible_to<bool>;
+      }
    consteval auto get_key() const noexcept
    {
       constexpr auto loc = std::lower_bound(std::begin(Keys), std::end(Keys), KeyToFind, Comp{});
