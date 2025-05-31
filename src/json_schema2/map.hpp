@@ -62,9 +62,6 @@ consteval auto make_map(const std::pair<Key, Value> (&init)[Size], Comp = std::l
    return map<Key, Value, Size, Comp>{init};
 }
 
-template<auto>
-struct x;
-
 template<
    typename Key,
    typename Comp,
@@ -91,7 +88,8 @@ struct multi_type_map {
    template<std::size_t I>
    consteval auto get() const noexcept
    {
-      return pair{Keys[I], std::get<Mapping[I]>(std::tuple{Values...})};
+      // Do mapping in this weird way to keep everything in order
+      return pair{Keys[Mapping[I]], std::get<I>(std::tuple{Values...})};
    }
 
    constexpr auto size() const noexcept { return Size; }

@@ -14,13 +14,47 @@ constexpr char basic_nested_schema[]{R"(
             "sadness": {
                "type": "number"
             }
+         },
+         "required": ["sadness"]
+      }
+   },
+   "required": ["pain"]
+})"};
+
+constexpr char basic_array_schema[](R"(
+{
+   "$schema": "https://json-schema.org/draft/2020-12/schema",
+   "type": "object",
+   "properties": {
+      "fruits": {
+         "type": "array",
+         "items": {
+            "type": "string"
+         }
+      },
+      "vegetables": {
+         "type": "array",
+         "items": { "$ref": "#/$defs/veggie" }
+      }
+   },
+   "$defs": {
+      "veggie": {
+         "type": "object",
+         "required": [ "veggieName", "veggieLike" ],
+         "properties": {
+            "veggieName": {
+               "type": "string"
+            },
+            "veggieLike": {
+               "type": "boolean"
+            }
          }
       }
    }
-})"};
+})");
 
 template<std::size_t N>
-using cstr = khct::string<N>;
+using strc = khct::string<N>;
 
 template<khct::string name>
 struct json_schema_types;
@@ -36,138 +70,138 @@ struct obj_result {
    std::meta::info obj_struct;
 };
 
-template<cstr StructName, auto Def, bool Required>
+template<strc StructName, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_object();
 
-template<cstr StructName, auto Def, bool Required>
+template<strc StructName, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_field();
 
-template<cstr Structname, auto Def, bool Required>
+template<strc Structname, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_array();
 
-template<cstr StructName, auto Def, bool Required>
+template<strc StructName, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_object()
 {
    static_assert(Required);
    std::vector<std::meta::info> fields;
-   template for (constexpr auto name_and_props : Def.template get_key<cstr{"properties"}>())
+   template for (constexpr auto name_and_props : Def.template get_key<strc{"properties"}>())
    {
       constexpr auto name = name_and_props.first;
+      static_assert(
+         name.view() != "additional_properties", "additional_properties field name is reserved for library use");
       constexpr auto props = name_and_props.second;
-      constexpr auto type = props.template get_key<cstr{"type"}>();
+      constexpr auto type = props.template get_key<strc{"type"}>();
       if constexpr (type.view() == "object") {
-         auto obj = handle_object<StructName + cstr{"::"} + name, props, true>();
+         const auto obj = handle_object<StructName + strc{"::"} + name, DefPrefix, props, true>();
          fields.push_back(std::meta::data_member_spec(obj, {.name = name, .no_unique_address = true}));
       }
       else if constexpr (type.view() == "array") {
-         // TODO
+         fields.push_back(
+            std::meta::data_member_spec(
+               handle_array<StructName, DefPrefix, props, true>(), {.name = name, .no_unique_address = true}));
       }
       else {
          fields.push_back(
             std::meta::data_member_spec(
-               handle_field<StructName, props, true>(), {.name = name, .no_unique_address = true}));
+               handle_field<StructName, DefPrefix, props, true>(), {.name = name, .no_unique_address = true}));
       }
    }
    constexpr auto to_define = std::meta::substitute(^^json_schema_types, {std::meta::reflect_constant(StructName)});
    return std::meta::define_aggregate(to_define, fields);
 }
 
-template<cstr StructName, auto Def, bool Required>
+template<strc StructName, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_field()
 {
-   static_assert(Required);
-   constexpr auto type = Def.template get_key<cstr{"type"}>();
+   constexpr auto type = Def.template get_key<strc{"type"}>();
    constexpr auto iter = std::ranges::find(type_mapping, type, [](const auto& t) { return t.first; });
    static_assert(iter != type_mapping.end());
-   return iter->second;
+   if constexpr (Required) {
+      return iter->second;
+   }
+   else {
+      return std::meta::substitute(^^std::optional, {iter->second});
+   }
 }
 
-template<cstr Structname, auto Def, bool Required>
+template<strc StructName, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_array()
 {
    static_assert(Required);
+   constexpr auto items = Def.template get_key<strc{"items"}>();
+   // first try for a simple type
+   constexpr auto type = items.template get_key<strc{"type"}>();
+   if constexpr (type != khct::nil) {
+      const auto to_add = handle_field<StructName, DefPrefix, items, true>();
+      const auto as_vec = std::meta::substitute(^^std::vector, {to_add});
+      return as_vec;
+   }
+   else {
+      // Otherwise this is a def_type
+      static constexpr auto ref = items.template get_key<strc{"$ref"}>();
+      constexpr std::string_view def_start = "#/$defs/";
+      static_assert(ref.view().starts_with(def_start));
+      constexpr auto name = ref.template splice<def_start.size(), ref.size()>();
+      const auto value_type = ^^json_schema_types<DefPrefix + name>;
+      return std::meta::substitute(^^std::vector, {value_type});
+   }
 }
 
-template<cstr StructName, cstr DefPrefix, cstr JsonSchema>
+template<strc StructName, strc DefPrefix, strc JsonSchema>
 consteval void define_schema_types()
 {
    constexpr auto json = khct::parse_json<JsonSchema>();
-   constexpr auto type = json.template get_key<cstr{"type"}>();
-   if constexpr (type == "object") {
-      handle_object<StructName, json, true>();
-   }
-   else if constexpr (type == "array") {
-      // TODO
-   }
-   else {
-      // TODO
-   }
-}
-
-consteval { define_schema_types<"root", "test_", basic_nested_schema>(); }
-
-using root = json_schema_types<"root">;
-
-constexpr auto heck = root{.pain = {.sadness = 10.0}};
-
-int main() {}
-
-/*
-Wow we're doing psuedo-code!!!
-
-Basic type:
-   - This will either resolve to an optional or a base type
-   - Easy
-   - Pass is_required from above; should be false by default
-   - Creates a new data member but not a new data type
-
-Handling a type of object:
-   - This will always create a new type
-   - Creates both a new data member and a new data type
-
-Handling a type of array:
-   - This also results in a new type being created?
-   - At least a substitution into std::vector
-   - Creates both a new data member and potentially a new data type?
-
-Let's do some basic (but painful) sets:
-schema:
-   {
-      "type": "object",
-      "properties":
+   constexpr auto defs = json.template get_key<strc{"$defs"}>();
+   // Define any defs first
+   if constexpr (defs != khct::nil) {
+      template for (constexpr auto name_and_info : defs)
       {
-         "pain":
-         {
-            "type": "object",
-            "properties":
-            {
-               "sadness":
-               {
-                  "type": "number"
-               }
-            }
+         constexpr auto name = name_and_info.first;
+         constexpr auto info = name_and_info.second;
+         constexpr auto type = info.template get_key<strc{"type"}>();
+         static_assert(type == "object", "Non-object defs not yet supported");
+         if constexpr (type == "object") {
+            handle_object<DefPrefix + name, DefPrefix, info, true>();
+         }
+         else if constexpr (type == "array") {
+            handle_array<DefPrefix + name, DefPrefix, info, true>();
+         }
+         else {
+            handle_value<DefPrefix + name, DefPrefix, info, true>();
          }
       }
    }
-
-value:
-   {
-      "pain": {
-         "sadness": 20
-      }
+   // Then define the main thing
+   constexpr auto type = json.template get_key<strc{"type"}>();
+   if constexpr (type == "object") {
+      handle_object<StructName, DefPrefix, json, true>();
    }
+   else if constexpr (type == "array") {
+      // TODO
+      static_assert(false, "not supported yet");
+   }
+   else {
+      // TODO
+      static_assert(false, "not supported yet");
+   }
+}
 
-so we can have a "test::base_obj::pain" struct
-and a "test::base_obj" struct?
+consteval
+{
+   define_schema_types<"root", "", basic_nested_schema>();
+   define_schema_types<"veggies_and_fruits", "test_", basic_array_schema>();
+}
 
-that look like
-test::base_obj::pain { std::optional<double> sadness; };
-test::base_obj { std::optional<test::base_obj::pain>; };
+using root = json_schema_types<"root">;
+using veggies_and_fruits = json_schema_types<"veggies_and_fruits">;
 
-process:
-   - Register the required fields {}
-   - look at the properties
-      - for each property
-         -
+constexpr auto heck = root{.pain = {.sadness = 10.0}};
 
-*/
+const auto heck2 = veggies_and_fruits{
+   .fruits = {"apple", "orange", "test"},
+   .vegetables = {{
+      .veggieName = "banana",
+      .veggieLike = true,
+   }}};
+
+int main() {}

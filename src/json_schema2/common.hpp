@@ -3,23 +3,24 @@
 
 #include <compare>
 #include <concepts>
+#include <type_traits>
 #include <utility>
 
 namespace khct {
 
 struct nil_t {
-   friend constexpr bool operator==(const nil_t&, const nil_t&) noexcept = default;
+   friend constexpr bool operator==(const nil_t&, const nil_t&) noexcept { return true; }
 
    // No other types compare true to nil aside from nil
    template<typename T>
-      requires(!std::same_as<T, nil_t>)
+      requires(!std::same_as<std::remove_cvref_t<T>, nil_t>)
    friend constexpr bool operator==(const nil_t&, T other) noexcept
    {
       return false;
    }
 
    template<typename T>
-      requires(!std::same_as<T, nil_t>)
+      requires(!std::same_as<std::remove_cvref_t<T>, nil_t>)
    friend constexpr bool operator==(T other, const nil_t&) noexcept
    {
       return false;
