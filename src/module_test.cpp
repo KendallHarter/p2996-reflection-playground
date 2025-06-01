@@ -12,16 +12,27 @@ export consteval std::string_view get_fully_qualified_type(std::meta::info info)
 
 consteval std::string get_fully_qualified_name_string(std::meta::info info)
 {
-   const std::string_view name_view = std::meta::identifier_of(info);
-   std::string name(name_view.data(), name_view.data() + name_view.size());
+   const std::string base_name = [&]() -> std::string {
+      if (!std::meta::has_identifier(info)) {
+         if (std::meta::is_namespace(info)) {
+            return "<anonymous namespace>";
+         }
+         else if (std::meta::is_aggregate_type(info)) {
+            return "<anonymous>";
+         }
+      }
+      const std::string_view name_view = std::meta::identifier_of(info);
+      std::string name(name_view.data(), name_view.data() + name_view.size());
+      return name;
+   }();
    const auto parent = std::meta::parent_of(info);
    if (parent != ^^::) {
-      name = get_fully_qualified_name_string(parent) + "::" + name;
+      return get_fully_qualified_name_string(parent) + "::" + base_name;
    }
    else {
-      name = "::" + name;
+      // name = "::" + name;
+      return base_name;
    }
-   return name;
 }
 
 export consteval std::string_view get_fully_qualified_name(std::meta::info info)
@@ -47,8 +58,7 @@ constexpr auto basic_type_mapping = std::to_array<std::pair<std::meta::info, std
     {^^float, "float"},
     {^^double, "double"},
     {^^long double, "long double"},
-    {^^std::nullptr_t, "std::nullptr_t"},
-    {^^std::meta::info, "std::meta::info"}});
+    {^^void, "void"}});
 
 consteval std::string get_fully_qualified_type_str(std::meta::info info)
 {
@@ -68,6 +78,18 @@ consteval std::string get_fully_qualified_type_str(std::meta::info info)
    const auto no_cv_type = std::meta::remove_cv(info);
    const auto iter = std::ranges::find(basic_type_mapping, no_cv_type, [](auto p) { return p.first; });
    if (iter == basic_type_mapping.end()) {
+      if (info == std::meta::underlying_entity_of(^^std::meta::info)) {
+         if (!build_up.empty()) {
+            build_up = " " + build_up;
+         }
+         return "std::meta::info" + build_up;
+      }
+      if (info == std::meta::underlying_entity_of(^^std::nullptr_t)) {
+         if (!build_up.empty()) {
+            build_up = " " + build_up;
+         }
+         return "std::nullptr_t" + build_up;
+      }
       if (std::meta::is_lvalue_reference_type(info)) {
          if (!build_up.empty()) {
             build_up = " " + build_up;
