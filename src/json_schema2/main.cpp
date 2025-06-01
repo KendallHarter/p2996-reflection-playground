@@ -233,31 +233,29 @@ const auto heck2 = veggies_and_fruits{
 // - Testing section
 // ----------------------------------
 
-// template <typename T, T... Vs>
-// constexpr T fixed_str[sizeof...(Vs) + 1]{Vs..., '\0'};
+template<typename T, T... Vs>
+constexpr T fixed_str[sizeof...(Vs) + 1]{Vs..., '\0'};
 
-// consteval auto reflect_constant_string(std::string_view v) -> std::meta::info {
-//    auto args = std::vector<std::meta::info>{^^char};
-//    for (auto&& elem : v) {
-//       args.push_back(std::meta::reflect_constant(elem));
-//    }
-//    return std::meta::substitute(^^fixed_str, args);
-// }
+consteval auto reflect_constant_string(std::string_view v) -> std::meta::info
+{
+   auto args = std::vector<std::meta::info>{^^char};
+   for (auto&& elem : v) {
+      args.push_back(std::meta::reflect_constant(elem));
+   }
+   return std::meta::substitute(^^fixed_str, args);
+}
 
-// template<khct::string name>
-// struct test_types;
+template<khct::string name>
+struct test_types;
 
-// consteval void tester(std::string_view v)
-// {
-//    const auto const_str = reflect_constant_string(v);
-//    const auto const_type = std::meta::substitute(^^test_types, {const_str});
-//    // const auto type = std::meta::substitute(^^test_types, {});
-//    // std::meta::define_aggregate(type, {^^int, {.name = v}});
-// }
+consteval void tester(std::string_view v)
+{
+   const auto type = std::meta::substitute(^^test_types, {reflect_constant_string(v)});
+   std::meta::define_aggregate(type, {std::meta::data_member_spec(^^int, {.name = v})});
+}
 
-// consteval
-// {
-//    tester("hi");
-// }
+consteval { tester("hi"); }
+
+constexpr auto vals = test_types<"hi">{.hi = 20};
 
 int main() {}
