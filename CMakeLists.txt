@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.28)
 
 project(p2996_playground)
 
@@ -18,3 +18,13 @@ add_executable(named_construct src/named_construct.cpp)
 add_executable(json_struct src/json_struct.cpp)
 add_executable(json_schema src/json_schema.cpp)
 add_executable(json_schema2 src/json_schema2/main.cpp)
+add_executable(module_test src/module_test_main.cpp)
+
+target_sources(
+   module_test PUBLIC
+   FILE_SET
+      modules
+   TYPE
+      CXX_MODULES
+   FILES
+      src/module_test.cpp)
