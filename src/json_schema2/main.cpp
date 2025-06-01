@@ -94,10 +94,6 @@ constexpr auto type_mapping = std::to_array<std::pair<std::string_view, std::met
     {"integer", std::meta::underlying_entity_of(^^std::int64_t)},
     {"string", std::meta::underlying_entity_of(^^std::string)}});
 
-struct obj_result {
-   std::meta::info obj_struct;
-};
-
 template<strc StructName, strc DefPrefix, auto Def, bool Required>
 consteval std::meta::info handle_object();
 
