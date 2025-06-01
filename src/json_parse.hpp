@@ -29,12 +29,16 @@
 struct json_value
    : std::variant<
         std::int64_t,
+        bool,
+        std::nullptr_t,
         std::string_view,
         std::vector<std::pair<std::string_view, json_value>>,
         std::vector<json_value>> {
 private:
    using base = std::variant<
       std::int64_t,
+      bool,
+      std::nullptr_t,
       std::string_view,
       std::vector<std::pair<std::string_view, json_value>>,
       std::vector<json_value>>;
@@ -47,12 +51,21 @@ using json_array = std::vector<json_value>;
 using json_map = std::vector<std::pair<std::string_view, json_value>>;
 
 template<typename Range>
-consteval const std::ranges::range_value_t<Range>::second_type& get_by_key(Range&& vals, const std::string_view key)
+consteval const std::ranges::range_value_t<Range>::second_type* get_by_key_opt(Range&& vals, const std::string_view key)
 {
    for (auto&& [comp_key, value] : vals) {
       if (comp_key == key) {
-         return value;
+         return &value;
       }
+   }
+   return nullptr;
+}
+
+template<typename Range>
+consteval const std::ranges::range_value_t<Range>::second_type& get_by_key(Range&& vals, const std::string_view key)
+{
+   if (const auto val = get_by_key_opt(std::forward<Range>(vals), key)) {
+      return *val;
    }
    throw std::runtime_error{"no matching key found"};
 }
@@ -108,7 +121,16 @@ consteval std::pair<std::string_view, std::string_view> parse_json_str(const std
 // Pre: leading whitespace has been removed
 consteval std::pair<json_value, std::string_view> parse_json_value(const std::string_view v)
 {
-   if (v.front() == '-' || (v.front() >= '0' && v.front() <= '9')) {
+   if (v.starts_with("true")) {
+      return {true, v.substr(4)};
+   }
+   else if (v.starts_with("false")) {
+      return {false, v.substr(5)};
+   }
+   else if (v.starts_with("null")) {
+      return {nullptr, v.substr(4)};
+   }
+   else if (v.front() == '-' || (v.front() >= '0' && v.front() <= '9')) {
       // number
       std::int64_t value;
       const auto [rest, ec] = std::from_chars(v.data(), v.data() + v.size(), value);

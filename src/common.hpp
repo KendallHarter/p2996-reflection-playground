@@ -70,6 +70,9 @@ namespace impl {
 template<typename T, T... Values>
 inline constexpr T fixed_array[sizeof...(Values)]{Values...};
 
+template<typename T, T... Vs>
+constexpr T fixed_str[sizeof...(Vs) + 1]{Vs..., '\0'};
+
 } // namespace impl
 
 template<std::ranges::input_range R>
@@ -90,6 +93,15 @@ consteval std::span<const std::ranges::range_value_t<R>> define_static_array(R&&
    auto array = reflect_constant_array(r);
 
    return {std::meta::extract<const T*>(array), std::meta::extent(std::meta::type_of(array))};
+}
+
+consteval auto reflect_constant_string(std::string_view v) -> std::meta::info
+{
+   auto args = std::vector<std::meta::info>{^^char};
+   for (auto&& elem : v) {
+      args.push_back(std::meta::reflect_constant(elem));
+   }
+   return std::meta::substitute(^^impl::fixed_str, args);
 }
 
 #endif // COMMON_HPP
