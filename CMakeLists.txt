@@ -28,4 +28,4 @@ target_sources(
    TYPE
       CXX_MODULES
    FILES
-      src/module_test.cpp)
+      src/module_test.cppm)
