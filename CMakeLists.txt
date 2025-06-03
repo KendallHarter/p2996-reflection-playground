@@ -20,6 +20,7 @@ add_executable(json_schema src/json_schema.cpp)
 add_executable(json_schema2 src/json_schema2/main.cpp)
 add_executable(module_test src/module_test_main.cpp)
 add_executable(json_schema3 src/json_schema3.cpp)
+add_executable(etc src/etc.cpp)
 
 target_sources(
    module_test PUBLIC
