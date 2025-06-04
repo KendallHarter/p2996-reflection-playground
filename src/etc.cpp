@@ -40,12 +40,26 @@ private:
    // clang-format off
    template<std::size_t I, typename T>
    constexpr named_variant(std::integral_constant<std::size_t, I>, T&& value)
-      requires std::convertible_to<decltype(value), [:std::meta::type_of(get_nth_member(I)):]> {
-         storage_.[:get_nth_member(I):] = std::forward<T>(value);
-         index_ = I;
+      requires std::convertible_to<decltype(value), [:std::meta::type_of(get_nth_member(I)):]>
+   {
+      storage_.[:get_nth_member(I):] = std::forward<T>(value);
+      index_ = I;
+   }
+
+   constexpr void delete_cur_index()
+   {
+      template for (constexpr auto i : ::define_static_array(std::views::iota(0zu, sizeof...(Members))))
+      {
+         if (i == index_) {
+            std::destroy_at(&storage_.[:get_nth_member(i):]);
+            return;
+         }
       }
+   }
+
    template<fixed_string Name>
-   static consteval auto get_index_by_name() -> std::size_t{
+   static consteval auto get_index_by_name() -> std::size_t
+   {
       template for (constexpr auto i : ::define_static_array(std::views::iota(0zu, sizeof...(Members)))) {
          if (Name == Members...[i].name) {
             return static_cast<std::size_t>(i);
@@ -53,48 +67,48 @@ private:
       }
       throw std::runtime_error{"Name not found"};
    }
-// clang-format on
 
 public:
-template<fixed_string Name, typename T>
-constexpr static named_variant create(T&& val)
-{
-   constexpr auto index = get_index_by_name<Name>();
-   return {std::integral_constant<std::size_t, index>{}, std::forward<T>(val)};
-}
-
-constexpr ~named_variant()
-{
-   template for (constexpr auto i : ::define_static_array(std::views::iota(0zu, sizeof...(Members))))
+   template<fixed_string Name, typename T>
+   constexpr static auto create(T&& val) -> named_variant
    {
-      if (i == index_) {
-         std::destroy_at(&storage_.[:get_nth_member(i):]);
-         return;
+      constexpr auto index = get_index_by_name<Name>();
+      return {std::integral_constant<std::size_t, index>{}, std::forward<T>(val)};
+   }
+
+   constexpr ~named_variant()
+   {
+      delete_cur_index();
+   }
+
+   template<fixed_string Name>
+   constexpr auto get() const& noexcept -> const decltype(storage_.[:get_nth_member(get_index_by_name<Name>()):])*
+   {
+      constexpr auto index = get_index_by_name<Name>();
+      if (index != index_) {
+         return nullptr;
       }
+      return &storage_.[:get_nth_member(index):];
    }
-}
 
-template<fixed_string Name>
-constexpr auto get() const& noexcept -> const decltype(storage_.[:get_nth_member(get_index_by_name<Name>()):])*
-{
-   constexpr auto index = get_index_by_name<Name>();
-   if (index != index_) {
-      return nullptr;
+   template<fixed_string Name>
+   constexpr auto get() & noexcept -> decltype(storage_.[:get_nth_member(get_index_by_name<Name>()):])*
+   {
+      constexpr auto index = get_index_by_name<Name>();
+      if (index != index_) {
+         return nullptr;
+      }
+      return &storage_.[:get_nth_member(index):];
    }
-   return &storage_.[:get_nth_member(index):];
-}
 
-template<fixed_string Name>
-constexpr auto get() & noexcept -> decltype(storage_.[:get_nth_member(get_index_by_name<Name>()):])*
-{
-   constexpr auto index = get_index_by_name<Name>();
-   if (index != index_) {
-      return nullptr;
+   template<fixed_string Name, typename T>
+      requires std::convertible_to<T, decltype(*std::declval<named_variant>().template get<Name>())>
+   constexpr void set(T&& value)
+   {
+      *this = create<Name>(std::forward<T>(value));
    }
-   return &storage_.[:get_nth_member(index):];
-}
-}
-;
+};
+// clang-format on
 
 template<typename T>
 struct debug_print_struct {
@@ -210,4 +224,6 @@ int main()
    constexpr var a = var::create<"wow">(10);
    static_assert(!a.get<"wow2">());
    static_assert(*a.get<"wow">() == 10);
+   var b = var::create<"wow2">(20);
+   b.set<"wow">(10);
 }
