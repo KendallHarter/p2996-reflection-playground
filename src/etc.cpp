@@ -37,22 +37,23 @@ private:
       return std::meta::nonstatic_data_members_of(^^storage_union, ctx)[i];
    }
 
+   // clang-format off
    template<std::size_t I, typename T>
    constexpr named_variant(std::integral_constant<std::size_t, I>, T&& value)
-      // clang-format off
       requires std::convertible_to<decltype(value), [:std::meta::type_of(get_nth_member(I)):]> {
          storage_.[:get_nth_member(I):] = std::forward<T>(value);
          index_ = I;
       }
-   // clang-format on
    template<fixed_string Name>
-   static consteval auto get_index_by_name()
-      -> std::size_t{template for (constexpr auto i : ::define_static_array(std::views::iota(0zu, sizeof...(Members)))){
-         if (Name == Members...[i].name){return static_cast<std::size_t>(i);
-}
-}
-throw std::runtime_error{"Name not found"};
-}
+   static consteval auto get_index_by_name() -> std::size_t{
+      template for (constexpr auto i : ::define_static_array(std::views::iota(0zu, sizeof...(Members)))) {
+         if (Name == Members...[i].name) {
+            return static_cast<std::size_t>(i);
+         }
+      }
+      throw std::runtime_error{"Name not found"};
+   }
+// clang-format on
 
 public:
 template<fixed_string Name, typename T>
