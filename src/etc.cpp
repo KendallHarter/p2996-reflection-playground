@@ -1,5 +1,6 @@
 #include "common.hpp"
 
+#include <cassert>
 #include <experimental/meta>
 #include <print>
 #include <ranges>
@@ -77,9 +78,16 @@ public:
    }
 
    constexpr ~named_variant()
+      requires (!(std::is_trivially_destructible_v<typename decltype(Members)::type> && ...))
    {
       delete_cur_index();
    }
+
+   constexpr ~named_variant()
+      requires(std::is_trivially_destructible_v<typename decltype(Members)::type> && ...)
+   = default;
+
+   // TODO: copy/move constructors, copy/move assignment operators
 
    template<fixed_string Name>
    constexpr auto get() const& noexcept -> const decltype(storage_.[:get_nth_member(get_index_by_name<Name>()):])*
@@ -224,6 +232,8 @@ int main()
    constexpr var a = var::create<"wow">(10);
    static_assert(!a.get<"wow2">());
    static_assert(*a.get<"wow">() == 10);
-   var b = var::create<"wow2">(20);
-   b.set<"wow">(10);
+   var b = var::create<"wow">(20);
+   b.set<"wow2">(10);
+   assert(!b.get<"wow">());
+   assert(b.get<"wow2">() && *b.get<"wow2">() == 10);
 }
