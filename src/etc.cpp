@@ -39,11 +39,12 @@ private:
 
    template<std::size_t I, typename T>
    constexpr named_variant(std::integral_constant<std::size_t, I>, T&& value)
-      requires std::convertible_to<decltype(value), [ : std::meta::type_of(get_nth_member(I)) : ]> {
+      // clang-format off
+      requires std::convertible_to<decltype(value), [:std::meta::type_of(get_nth_member(I)):]> {
          storage_.[:get_nth_member(I):] = std::forward<T>(value);
          index_ = I;
       }
-
+   // clang-format on
    template<fixed_string Name>
    static consteval auto get_index_by_name()
       -> std::size_t{template for (constexpr auto i : ::define_static_array(std::views::iota(0zu, sizeof...(Members)))){
