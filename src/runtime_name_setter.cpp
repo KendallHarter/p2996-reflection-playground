@@ -188,7 +188,8 @@ int main()
            template for (constexpr auto mem : nsdm)
            {
               std::print("   ");
-              print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
+              // TODO: Fix this
+              // print_named_value(std::meta::identifier_of(mem), vals.[:mem:]);
               std::println("");
            };
         }}});

@@ -75,9 +75,10 @@ constexpr decltype(auto) call_with_param_names(ParamTypes&&... args)
    if constexpr (
       std::meta::is_function(Info) && std::meta::is_class_member(Info) && !std::meta::is_static_member(Info)) {
       // Member function
+      using parent = [:std::meta::parent_of(Info):];
       static_assert(std::convertible_to<
                     std::add_lvalue_reference_t<std::remove_cvref_t<ParamTypes...[0]>>,
-                    std::add_lvalue_reference_t<[:std::meta::parent_of(Info):]>>);
+                    std::add_lvalue_reference_t<parent>>);
       static_assert(sizeof...(ParamTypes) - 1 == std::meta::parameters_of(Info).size());
       return []<typename ObjType, typename... MemFuncParams>(
                 ObjType&& object, MemFuncParams&&... rest) -> decltype(auto) {

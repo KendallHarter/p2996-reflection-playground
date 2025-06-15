@@ -6,11 +6,11 @@
 #include <experimental/meta>
 
 constexpr auto type_mapping = std::to_array<std::pair<std::string_view, std::meta::info>>(
-   {{"null", std::meta::underlying_entity_of(^^std::nullptr_t)},
+   {{"null", ^^tdef<std::nullptr_t>::type},
     {"boolean", ^^bool},
     {"number", ^^double},
-    {"integer", std::meta::underlying_entity_of(^^std::int64_t)},
-    {"string", std::meta::underlying_entity_of(^^std::string)}});
+    {"integer", ^^tdef<std::int64_t>::type},
+    {"string", ^^tdef<std::string>::type}});
 
 constexpr char basic_array_schema[]{R"(
 {

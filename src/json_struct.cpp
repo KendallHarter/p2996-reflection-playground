@@ -9,14 +9,14 @@ static_assert(
    parse_json("{\"a\": 123}") == json_value{std::vector<std::pair<std::string_view, json_value>>{{"a", 123}}});
 
 constexpr auto type_mapping = std::to_array<std::pair<std::string_view, std::meta::info>>({
-   {"i8", std::meta::underlying_entity_of(^^std::int8_t)},
-   {"i16", std::meta::underlying_entity_of(^^std::int16_t)},
-   {"i32", std::meta::underlying_entity_of(^^std::int32_t)},
-   {"i64", std::meta::underlying_entity_of(^^std::int64_t)},
-   {"u8", std::meta::underlying_entity_of(^^std::uint8_t)},
-   {"u16", std::meta::underlying_entity_of(^^std::uint16_t)},
-   {"u32", std::meta::underlying_entity_of(^^std::uint32_t)},
-   {"u64", std::meta::underlying_entity_of(^^std::uint64_t)},
+   {"i8", ^^tdef<std::int8_t>::type},
+   {"i16", ^^tdef<std::int16_t>::type},
+   {"i32", ^^tdef<std::int32_t>::type},
+   {"i64", ^^tdef<std::int64_t>::type},
+   {"u8", ^^tdef<std::uint8_t>::type},
+   {"u16", ^^tdef<std::uint16_t>::type},
+   {"u32", ^^tdef<std::uint32_t>::type},
+   {"u64", ^^tdef<std::uint64_t>::type},
 });
 
 consteval std::meta::info make_struct_from_json(std::meta::info to_complete, const std::string_view json_str)

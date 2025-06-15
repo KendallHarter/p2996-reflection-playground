@@ -6,6 +6,8 @@ module;
 #include <ranges>
 #include <string>
 
+#include "common.hpp"
+
 export module module_test;
 
 export consteval std::string_view get_fully_qualified_type(std::meta::info info);
@@ -62,9 +64,9 @@ constexpr auto basic_type_mapping = std::to_array<std::pair<std::meta::info, std
 
 consteval std::string get_fully_qualified_type_str(std::meta::info info)
 {
-   if (std::meta::is_type_alias(info)) {
-      return get_fully_qualified_type_str(std::meta::underlying_entity_of(info));
-   }
+   // if (std::meta::is_type_alias(info)) {
+   //    return get_fully_qualified_type_str(^^tdef<info>::type);
+   // }
    std::string build_up = "";
    if (std::meta::is_volatile_type(info)) {
       build_up += "volatile";
@@ -78,13 +80,13 @@ consteval std::string get_fully_qualified_type_str(std::meta::info info)
    const auto no_cv_type = std::meta::remove_cv(info);
    const auto iter = std::ranges::find(basic_type_mapping, no_cv_type, [](auto p) { return p.first; });
    if (iter == basic_type_mapping.end()) {
-      if (info == std::meta::underlying_entity_of(^^std::meta::info)) {
+      if (info == ^^tdef<std::meta::info>::type) {
          if (!build_up.empty()) {
             build_up = " " + build_up;
          }
          return "std::meta::info" + build_up;
       }
-      if (info == std::meta::underlying_entity_of(^^std::nullptr_t)) {
+      if (info == ^^tdef<std::nullptr_t>::type) {
          if (!build_up.empty()) {
             build_up = " " + build_up;
          }

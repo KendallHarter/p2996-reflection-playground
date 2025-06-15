@@ -184,4 +184,10 @@ struct std::tuple_size<khct::pair<T1, T2>> : std::integral_constant<std::size_t,
 template<typename... Ts>
 struct std::tuple_size<khct::tuple<Ts...>> : std::integral_constant<std::size_t, sizeof...(Ts)> {};
 
+// Dumb workaround for not being able to reflect type aliases
+template<typename T>
+struct tdef {
+   typedef T type;
+};
+
 #endif // KHCT_COMMON_HPP

@@ -4,7 +4,7 @@
 CLANG_TAG=p2996
 
 # A safe Clang tag that is known to build
-SAFE_CLANG_TAG=5b2c490baa11b4cdfadb9d3869c2ecab4b479066
+SAFE_CLANG_TAG=3f0ffa2c245a691361e7ce7644d423479680fcc3
 
 # Make sure the script works anywhere
 cd "$(dirname $(realpath "$0"))"

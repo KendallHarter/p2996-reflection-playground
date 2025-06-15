@@ -41,7 +41,7 @@ private:
    // clang-format off
    template<std::size_t I, typename T>
    constexpr named_variant(std::integral_constant<std::size_t, I>, T&& value)
-      requires std::convertible_to<decltype(value), [:std::meta::type_of(get_nth_member(I)):]>
+      requires std::convertible_to<decltype(value), typename [:std::meta::type_of(get_nth_member(I)):]>
    {
       storage_.[:get_nth_member(I):] = std::forward<T>(value);
       index_ = I;
@@ -84,10 +84,12 @@ public:
    }
 
    constexpr ~named_variant()
-      requires(std::is_trivially_destructible_v<typename decltype(Members)::type> && ...)
+      requires (std::is_trivially_destructible_v<typename decltype(Members)::type> && ...)
    = default;
 
    // TODO: copy/move constructors, copy/move assignment operators
+   //       These don't matter too much for now because of compiler limitations
+   //       meaning that non-trivial destructable types can't be used
 
    template<fixed_string Name>
    constexpr auto get() const& noexcept -> const decltype(storage_.[:get_nth_member(get_index_by_name<Name>()):])*
@@ -111,6 +113,7 @@ public:
 
    template<fixed_string Name, typename T>
       requires std::convertible_to<T, decltype(*std::declval<named_variant>().template get<Name>())>
+         && std::is_nothrow_constructible_v<decltype(*std::declval<named_variant>().template get<Name>()), T&&>
    constexpr void set(T&& value)
    {
       *this = create<Name>(std::forward<T>(value));
@@ -143,6 +146,26 @@ constexpr auto as_debug(const T& val) noexcept -> debug_print_struct<T>
 template<typename T>
 concept is_debug_print_struct = requires(T val) { []<typename T2>(debug_print_struct<T2>*) {}(std::addressof(val)); };
 
+template<typename T>
+struct delim_outputter {
+   T& iter;
+   bool first = true;
+
+   constexpr void operator()() noexcept
+   {
+      if (!first) {
+         *iter = ',';
+         ++iter;
+         *iter = ' ';
+         ++iter;
+      }
+      first = false;
+   }
+};
+
+template<typename T>
+delim_outputter(T) -> delim_outputter<T>;
+
 template<typename T, typename CharT>
    requires(!is_debug_print_struct<T> && !std::formattable<T, CharT>)
 struct std::formatter<debug_print_struct<T>, CharT> {
@@ -155,23 +178,33 @@ struct std::formatter<debug_print_struct<T>, CharT> {
    template<typename FmtContext>
    static auto format(const debug_print_struct<T>& value, FmtContext& ctx) -> FmtContext::iterator
    {
-      auto out = [&]() {
-         if constexpr (std::meta::has_identifier(^^T)) {
-            return std::format_to(ctx.out(), "{}{{", std::meta::identifier_of(^^T));
+      typename FmtContext::iterator out = [&]<std::meta::info Type>() -> FmtContext::iterator {
+         if constexpr (std::meta::has_identifier(Type)) {
+            return std::format_to(ctx.out(), "{}{{", std::meta::identifier_of(Type));
+         }
+         else if constexpr (std::meta::has_template_arguments(Type)) {
+            auto to_ret = std::format_to(ctx.out(), "{}<", std::meta::identifier_of(std::meta::template_of(Type)));
+            auto output_delim = delim_outputter{to_ret};
+            template for (constexpr auto t_arg : ::define_static_array(std::meta::template_arguments_of(Type)))
+            {
+               output_delim();
+               ctx.advance_to(to_ret);
+               if constexpr (std::meta::is_value(t_arg) || std::meta::is_object(t_arg)) {
+                  to_ret = std::format_to(to_ret, "{}", as_debug([:t_arg:]));
+               }
+               else {
+                  to_ret = std::format_to(to_ret, "{}", std::meta::display_string_of(t_arg));
+               }
+            }
+            ctx.advance_to(to_ret);
+            return std::format_to(to_ret, ">{{");
          }
          else {
             return std::format_to(ctx.out(), "<unnamed>{{");
          }
-      }();
-      auto output_delim = [&, first = true] mutable {
-         if (!first) {
-            *out = ',';
-            ++out;
-            *out = ' ';
-            ++out;
-         }
-         first = false;
-      };
+      }.template operator()<^^T>();
+
+      auto output_delim = delim_outputter{out};
 
       static constexpr auto bases
          = ::define_static_array(std::meta::bases_of(^^T, std::meta::access_context::current()));
@@ -188,12 +221,12 @@ struct std::formatter<debug_print_struct<T>, CharT> {
       template for (constexpr auto mem : mems)
       {
          output_delim();
-         std::format_to(ctx.out(), ".{} = ", std::meta::identifier_of(mem));
+         std::format_to(out, ".{} = ", std::meta::identifier_of(mem));
          if constexpr (std::meta::is_class_type(std::meta::type_of(mem))) {
-            out = std::format_to(ctx.out(), "{}", as_debug(value.value.[:mem:]));
+            out = std::format_to(out, "{}", as_debug(value.value.[:mem:]));
          }
          else {
-            std::formatter<[:std::meta::remove_cvref(std::meta::type_of(mem)):]> member_formatter;
+            std::formatter<typename[:std::meta::remove_cvref(std::meta::type_of(mem)):]> member_formatter;
             if constexpr (requires() { member_formatter.set_debug_format(); }) {
                member_formatter.set_debug_format();
             }
@@ -228,7 +261,7 @@ int main()
    const auto test = hoot{.x = 20};
    std::print("{}\n", as_debug(hoot{.x = 20}));
    std::print("{}\n", as_debug(std::tuple{1, 2, 3, 4, 5}));
-   using var = named_variant<named_pair<"wow", int>, named_pair<"wow2", int>>;
+   using var = named_variant<named_pair<"wow", int>, named_pair<"wow2", int>, named_pair<"double", double>>;
    constexpr var a = var::create<"wow">(10);
    static_assert(!a.get<"wow2">());
    static_assert(*a.get<"wow">() == 10);
@@ -236,4 +269,7 @@ int main()
    b.set<"wow2">(10);
    assert(!b.get<"wow">());
    assert(b.get<"wow2">() && *b.get<"wow2">() == 10);
+   b.set<"double">(20);
+   assert(b.get<"double">() && *b.get<"double">() == 20.0);
+   std::print("{}\n", as_debug(b));
 }

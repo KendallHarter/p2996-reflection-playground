@@ -95,35 +95,35 @@ constexpr bool
 template<typename T>
 constexpr auto get_by_name(T& get_from, std::string_view name) noexcept
    // clang-format off
-   -> std::optional<to_ptr_variant<[:get_variant_of_unique_types<T>():]>> {
-      // clang-format on
-      static constexpr auto nsdm
-         = ::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
-      template for (constexpr auto mem : nsdm)
-      {
-         if (std::meta::identifier_of(mem) == name) {
-            return &get_from.[:mem:];
-         }
+   -> std::optional<to_ptr_variant<typename [:get_variant_of_unique_types<T>():]>> {
+   // clang-format on
+   static constexpr auto nsdm
+      = ::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+   template for (constexpr auto mem : nsdm)
+   {
+      if (std::meta::identifier_of(mem) == name) {
+         return &get_from.[:mem:];
       }
-      return std::nullopt;
    }
+   return std::nullopt;
+}
 
 // Is there a way to not just replicate this?
 template<typename T>
 constexpr auto get_by_name(const T& get_from, std::string_view name) noexcept
    // clang-format off
-   -> std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>> {
-      // clang-format on
-      using ret_type = std::optional<to_const_ptr_variant<[:get_variant_of_unique_types<T>():]>>;
-      static constexpr auto nsdm
-         = ::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
-      template for (constexpr auto mem : nsdm)
-      {
-         if (std::meta::identifier_of(mem) == name) {
-            return &get_from.[:mem:];
-         }
+   -> std::optional<to_const_ptr_variant<typename [:get_variant_of_unique_types<T>():]>> {
+   // clang-format on
+   using ret_type = std::optional<to_const_ptr_variant<typename[:get_variant_of_unique_types<T>():]>>;
+   static constexpr auto nsdm
+      = ::define_static_array(std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unchecked()));
+   template for (constexpr auto mem : nsdm)
+   {
+      if (std::meta::identifier_of(mem) == name) {
+         return &get_from.[:mem:];
       }
-      return std::nullopt;
    }
+   return std::nullopt;
+}
 
 #endif
