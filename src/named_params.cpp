@@ -49,7 +49,7 @@ consteval bool all_params_have_consistent_identifiers(std::meta::info func)
 {
    const auto params = std::meta::parameters_of(func);
    for (const auto& param : params) {
-      if (!std::meta::has_consistent_identifier(param)) {
+      if (!std::meta::has_identifier(param)) {
          return false;
       }
    };

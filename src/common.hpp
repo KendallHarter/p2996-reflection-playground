@@ -104,10 +104,9 @@ consteval auto reflect_constant_string(std::string_view v) -> std::meta::info
    return std::meta::substitute(^^impl::fixed_str, args);
 }
 
-// Dumb workaround for not being able to reflect type aliases
 template<typename T>
 struct tdef {
-   typedef T type;
+   using type = T;
 };
 
 #endif // COMMON_HPP
