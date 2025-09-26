@@ -118,31 +118,32 @@ struct func_caller {
    }
 };
 
-using non_owning_noise_funcs_struct = tuple<std::string_view (*)(const void*), int (*)(const void*, int)>;
+// Commenting out since future changes will probably break this
+// using non_owning_noise_funcs_struct = tuple<std::string_view (*)(const void*), int (*)(const void*, int)>;
 
-struct non_owning_noise_trait {
-public:
-   non_owning_noise_trait() = delete;
+// struct non_owning_noise_trait {
+// public:
+//    non_owning_noise_trait() = delete;
 
-   template<typename T>
-   constexpr explicit non_owning_noise_trait(const T* data)
-      : funcs_{define_static_object(
-           non_owning_noise_funcs_struct{
-              [](const void* c) -> decltype(auto) { return static_cast<const T*>(c)->get_noise(); },
-              [](const void* c, int mult) -> decltype(auto) { return static_cast<const T*>(c)->volume(mult); }})}
-      , data_{data}
-   {}
+//    template<typename T>
+//    constexpr explicit non_owning_noise_trait(const T* data)
+//       : funcs_{define_static_object(
+//            non_owning_noise_funcs_struct{
+//               [](const void* c) -> decltype(auto) { return static_cast<const T*>(c)->get_noise(); },
+//               [](const void* c, int mult) -> decltype(auto) { return static_cast<const T*>(c)->volume(mult); }})}
+//       , data_{data}
+//    {}
 
-   [[no_unique_address]] func_caller<0, true> get_noise;
-   [[no_unique_address]] func_caller<1, true> volume;
+//    [[no_unique_address]] func_caller<0, true> get_noise;
+//    [[no_unique_address]] func_caller<1, true> volume;
 
-private:
-   template<std::size_t, bool>
-   friend struct func_caller;
+// private:
+//    template<std::size_t, bool>
+//    friend struct func_caller;
 
-   const non_owning_noise_funcs_struct* funcs_;
-   const void* data_;
-};
+//    const non_owning_noise_funcs_struct* funcs_;
+//    const void* data_;
+// };
 
 // TODO: Condition noexcept
 template<typename Trait, typename... T>
@@ -185,7 +186,7 @@ consteval std::meta::info member_func_to_non_member_func(std::meta::info f)
 {
    std::vector<std::meta::info> infos;
    infos.push_back(std::meta::return_type_of(f));
-   if (std::meta::is_const(f)) {
+   if (std::meta::is_const(f) || std::meta::is_static_member(f)) {
       infos.push_back(^^const void*);
    }
    else {
@@ -201,9 +202,7 @@ consteval auto get_members_and_tuple_type(std::meta::info trait)
    -> std::pair<std::vector<std::meta::info>, std::vector<std::meta::info>>
 {
    auto funcs = std::meta::members_of(trait, std::meta::access_context::current())
-              | std::views::filter(std::meta::is_function)
-              | std::views::filter(std::not_fn(std::meta::is_static_member))
-              | std::views::filter(std::not_fn(std::meta::is_constructor))
+              | std::views::filter(std::meta::is_function) | std::views::filter(std::not_fn(std::meta::is_constructor))
               | std::views::filter(std::not_fn(std::meta::is_operator_function))
               | std::views::filter(std::not_fn(std::meta::is_destructor));
 
@@ -250,15 +249,13 @@ consteval auto make_dyn_trait_pointers()
    static constexpr auto func_ptrs = std::define_static_array(get_members_and_tuple_type(^^Trait).second);
    static constexpr auto trait_funcs = std::define_static_array(
       std::meta::members_of(^^Trait, std::meta::access_context::current()) | std::views::filter(std::meta::is_function)
-      | std::views::filter(std::not_fn(std::meta::is_static_member))
       | std::views::filter(std::not_fn(std::meta::is_constructor))
       | std::views::filter(std::not_fn(std::meta::is_operator_function))
       | std::views::filter(std::not_fn(std::meta::is_destructor)));
 
    static constexpr auto to_store_func = std::define_static_array(
       std::meta::members_of(^^ToStore, std::meta::access_context::current())
-      | std::views::filter(std::meta::is_function) | std::views::filter(std::not_fn(std::meta::is_static_member))
-      | std::views::filter(std::not_fn(std::meta::is_constructor))
+      | std::views::filter(std::meta::is_function) | std::views::filter(std::not_fn(std::meta::is_constructor))
       | std::views::filter(std::not_fn(std::meta::is_operator_function))
       | std::views::filter(std::not_fn(std::meta::is_destructor)));
 
@@ -274,7 +271,7 @@ consteval auto make_dyn_trait_pointers()
                   static constexpr auto to_ret = []() {
                      std::vector<std::meta::info> args;
                      args.push_back(std::meta::reflect_constant(f2));
-                     if (std::meta::is_const(f2)) {
+                     if (std::meta::is_const(f2) || std::meta::is_static_member(f2)) {
                         args.push_back(^^const void*);
                         args.push_back(^^const ToStore*);
                      }
@@ -314,13 +311,13 @@ constexpr auto make_mut_dyn_trait(ToStore* ptr) noexcept
 // USING THEM
 
 struct noise_trait {
-   std::string_view get_noise() const noexcept;
+   static std::string_view get_noise() noexcept;
    int volume(int) const noexcept;
    void get_louder() noexcept;
 };
 
 struct cow {
-   constexpr std::string_view get_noise() const noexcept { return "moo"; }
+   static constexpr std::string_view get_noise() noexcept { return "moo"; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ += 1; }
 
@@ -328,7 +325,7 @@ struct cow {
 };
 
 struct dog {
-   constexpr std::string_view get_noise() const noexcept { return "arf"; }
+   static constexpr std::string_view get_noise() noexcept { return "arf"; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ *= 2; }
 
@@ -346,8 +343,8 @@ int main()
 
    static constexpr cow c{};
    static constexpr dog d{};
-   static constexpr non_owning_noise_trait owner1{&c};
-   static_assert(dyn_call(owner1, owner1.get_noise) == "moo");
+   // static constexpr non_owning_noise_trait owner1{&c};
+   // static_assert(dyn_call(owner1, owner1.get_noise) == "moo");
 
    static constexpr auto owner2 = make_dyn_trait<noise_trait>(&c);
    static_assert(dyn_call(owner2, owner2.get_noise) == "moo");
