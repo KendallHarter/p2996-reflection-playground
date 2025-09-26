@@ -154,6 +154,9 @@ constexpr auto dyn_call(Trait self, const auto to_call, T&&... args) noexcept
 
 // AUTOMATIC NON-OWNING VERSION
 
+constexpr struct {
+} default_impl;
+
 template<std::meta::info... Info>
 struct outer {
    struct inner;
@@ -243,6 +246,10 @@ template<std::meta::info F, typename Ptr, typename Class, typename... Args>
 constexpr auto produce_func_ptr
    = [](Ptr c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
 
+template<std::meta::info F, typename... Args>
+constexpr auto produce_default_static_func_ptr
+   = [](const void*, Args... args) -> decltype(auto) { return [:F:](args...); };
+
 template<typename Trait, typename ToStore>
 consteval auto make_dyn_trait_pointers()
 {
@@ -263,32 +270,48 @@ consteval auto make_dyn_trait_pointers()
 
    return []<std::size_t... Is>(std::index_sequence<Is...>) {
       return ret_type {
-         []<std::size_t I>() {
+         []<std::size_t I>() -> [ : func_ptrs[I] : ] {
+            static constexpr auto produce_func_ptr_from_info = [](std::meta::info func_info) {
+               std::vector<std::meta::info> args;
+               args.push_back(std::meta::reflect_constant(func_info));
+               if (std::meta::is_const(func_info) || std::meta::is_static_member(func_info)) {
+                  args.push_back(^^const void*);
+                  args.push_back(^^const ToStore*);
+               }
+               else {
+                  args.push_back(^^void*);
+                  args.push_back(^^ToStore*);
+               }
+               for (const auto arg : std::meta::parameters_of(func_info)) {
+                  args.push_back(std::meta::type_of(arg));
+               }
+
+               return std::meta::substitute(^^produce_func_ptr, args);
+            };
             template for (constexpr auto f : to_store_func)
             {
                if constexpr (std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I])) {
-                  static constexpr auto f2 = f;
+                  return [:produce_func_ptr_from_info(f):];
+               }
+            }
+            // Default implementation
+            // This is std::meta::annotations_of_with_type in C++26
+            static constexpr auto f = trait_funcs[I];
+            static constexpr auto is_default = !std::meta::annotations_of(f, ^^decltype(default_impl)).empty();
+            if constexpr (is_default) {
+               if constexpr (std::meta::is_static_member(trait_funcs[I])) {
                   static constexpr auto to_ret = []() {
                      std::vector<std::meta::info> args;
-                     args.push_back(std::meta::reflect_constant(f2));
-                     if (std::meta::is_const(f2) || std::meta::is_static_member(f2)) {
-                        args.push_back(^^const void*);
-                        args.push_back(^^const ToStore*);
-                     }
-                     else {
-                        args.push_back(^^void*);
-                        args.push_back(^^ToStore*);
-                     }
+                     args.push_back(std::meta::reflect_constant(f));
                      for (const auto arg : std::meta::parameters_of(f)) {
-                        args.push_back(std::meta::type_of(arg));
+                        args.push_back(arg);
                      }
-
-                     return std::meta::substitute(^^produce_func_ptr, args);
+                     return std::meta::substitute(^^produce_default_static_func_ptr, args);
                   }();
                   return [:to_ret:];
                }
             }
-            throw "invalid name";
+            throw "invalid name/no default";
          }.template operator()<Is>()...
       };
    }.template operator()(std::make_index_sequence<trait_funcs.size()>{});
@@ -312,6 +335,9 @@ constexpr auto make_mut_dyn_trait(ToStore* ptr) noexcept
 
 struct noise_trait {
    static std::string_view get_noise() noexcept;
+
+   [[= default_impl]] static constexpr std::string_view get_secondary_noise() noexcept { return "(none)"; }
+
    int volume(int) const noexcept;
    void get_louder() noexcept;
 };
@@ -326,6 +352,7 @@ struct cow {
 
 struct dog {
    static constexpr std::string_view get_noise() noexcept { return "arf"; }
+   static constexpr std::string_view get_secondary_noise() noexcept { return "bark"; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ *= 2; }
 
@@ -351,6 +378,7 @@ int main()
 
    static constexpr auto owner3 = make_dyn_trait<noise_trait>(&d);
    static_assert(dyn_call(owner3, owner3.volume, 2) == 18);
+   static_assert(dyn_call(owner3, owner3.get_secondary_noise) == "bark");
 
    consteval
    {
@@ -358,5 +386,6 @@ int main()
       const auto trait = make_mut_dyn_trait<noise_trait>(&cow2);
       dyn_call(trait, trait.get_louder);
       assert(dyn_call(trait, trait.volume, 1) == 2);
+      assert(dyn_call(trait, trait.get_secondary_noise) == "(none)");
    }
 }
