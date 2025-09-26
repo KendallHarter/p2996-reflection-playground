@@ -99,12 +99,21 @@ public:
 // the first/the implicit this argument without tons of memory overhead and making it non-copyable, etc.
 
 // TODO: conditional noexcept
-template<std::size_t FuncIndex>
+template<std::size_t FuncIndex, bool IsConst>
 struct func_caller {
    template<typename Class, typename... Args>
+      requires(IsConst)
    static constexpr decltype(auto) call(const void* c, Args&&... args) noexcept
    {
       const auto* const ptr = static_cast<const Class*>(c);
+      return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
+   }
+
+   template<typename Class, typename... Args>
+      requires(!IsConst)
+   static constexpr decltype(auto) call(void* c, Args&&... args) noexcept
+   {
+      auto* const ptr = static_cast<Class*>(c);
       return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
    }
 };
@@ -124,11 +133,11 @@ public:
       , data_{data}
    {}
 
-   [[no_unique_address]] func_caller<0> get_noise;
-   [[no_unique_address]] func_caller<1> volume;
+   [[no_unique_address]] func_caller<0, true> get_noise;
+   [[no_unique_address]] func_caller<1, true> volume;
 
 private:
-   template<std::size_t>
+   template<std::size_t, bool>
    friend struct func_caller;
 
    const non_owning_noise_funcs_struct* funcs_;
@@ -137,7 +146,7 @@ private:
 
 // TODO: Condition noexcept
 template<typename Trait, typename... T>
-constexpr auto dyn_call(const Trait& self, const auto to_call, T&&... args) noexcept
+constexpr auto dyn_call(Trait self, const auto to_call, T&&... args) noexcept
 {
    return to_call.template call<Trait>(&self, std::forward<T>(args)...);
 }
@@ -176,7 +185,12 @@ consteval std::meta::info member_func_to_non_member_func(std::meta::info f)
 {
    std::vector<std::meta::info> infos;
    infos.push_back(std::meta::return_type_of(f));
-   infos.push_back(^^const void*);
+   if (std::meta::is_const(f)) {
+      infos.push_back(^^const void*);
+   }
+   else {
+      infos.push_back(^^void*);
+   }
    for (const auto i : std::meta::parameters_of(f)) {
       infos.push_back(std::meta::type_of(i));
    }
@@ -200,7 +214,9 @@ consteval auto get_members_and_tuple_type(std::meta::info trait)
       members.push_back(
          std::meta::reflect_constant(
             std::meta::data_member_spec(
-               std::meta::substitute(^^func_caller, {std::meta::reflect_constant(index)}),
+               std::meta::substitute(
+                  ^^func_caller,
+                  {std::meta::reflect_constant(index), std::meta::reflect_constant(std::meta::is_const(f))}),
                {.name = std::meta::identifier_of(f), .no_unique_address = true})));
       index += 1;
       func_ptrs.push_back(member_func_to_non_member_func(f));
@@ -208,10 +224,11 @@ consteval auto get_members_and_tuple_type(std::meta::info trait)
    return {members, func_ptrs};
 }
 
-consteval std::meta::info make_non_owning_dyn_trait(std::meta::info trait) noexcept
+consteval std::meta::info make_non_owning_dyn_trait(std::meta::info trait, bool is_const) noexcept
 {
    auto [members, func_ptrs] = get_members_and_tuple_type(trait);
-   members.push_back(std::meta::reflect_constant(std::meta::data_member_spec(^^const void*, {.name = "data_"})));
+   members.push_back(
+      std::meta::reflect_constant(std::meta::data_member_spec(is_const ? ^^const void* : ^^void*, {.name = "data_"})));
    members.push_back(
       std::meta::reflect_constant(
          std::meta::data_member_spec(
@@ -220,12 +237,12 @@ consteval std::meta::info make_non_owning_dyn_trait(std::meta::info trait) noexc
    return std::meta::substitute(^^cls, members);
 }
 
-template<typename Trait>
-using non_owning_dyn_trait = [:make_non_owning_dyn_trait(^^Trait):];
+template<typename Trait, bool IsConst>
+using non_owning_dyn_trait = [:make_non_owning_dyn_trait(^^Trait, IsConst):];
 
-template<std::meta::info F, typename Class, typename... Args>
+template<std::meta::info F, typename Ptr, typename Class, typename... Args>
 constexpr auto produce_func_ptr
-   = [](const void* c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
+   = [](Ptr c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
 
 template<typename Trait, typename ToStore>
 consteval auto make_dyn_trait_pointers()
@@ -257,7 +274,14 @@ consteval auto make_dyn_trait_pointers()
                   static constexpr auto to_ret = []() {
                      std::vector<std::meta::info> args;
                      args.push_back(std::meta::reflect_constant(f2));
-                     args.push_back(^^const ToStore*);
+                     if (std::meta::is_const(f2)) {
+                        args.push_back(^^const void*);
+                        args.push_back(^^const ToStore*);
+                     }
+                     else {
+                        args.push_back(^^void*);
+                        args.push_back(^^ToStore*);
+                     }
                      for (const auto arg : std::meta::parameters_of(f)) {
                         args.push_back(std::meta::type_of(arg));
                      }
@@ -276,7 +300,14 @@ consteval auto make_dyn_trait_pointers()
 template<typename DynTrait, typename ToStore>
 constexpr auto make_dyn_trait(const ToStore* ptr) noexcept
 {
-   return non_owning_dyn_trait<DynTrait>{
+   return non_owning_dyn_trait<DynTrait, true>{
+      .data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())};
+}
+
+template<typename DynTrait, typename ToStore>
+constexpr auto make_mut_dyn_trait(ToStore* ptr) noexcept
+{
+   return non_owning_dyn_trait<DynTrait, false>{
       .data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())};
 }
 
@@ -285,11 +316,13 @@ constexpr auto make_dyn_trait(const ToStore* ptr) noexcept
 struct noise_trait {
    std::string_view get_noise() const noexcept;
    int volume(int) const noexcept;
+   void get_louder() noexcept;
 };
 
 struct cow {
    constexpr std::string_view get_noise() const noexcept { return "moo"; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
+   constexpr void get_louder() noexcept { volume_ += 1; }
 
    int volume_ = 1;
 };
@@ -297,6 +330,7 @@ struct cow {
 struct dog {
    constexpr std::string_view get_noise() const noexcept { return "arf"; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
+   constexpr void get_louder() noexcept { volume_ *= 2; }
 
    int volume_ = 9;
 };
@@ -320,4 +354,12 @@ int main()
 
    static constexpr auto owner3 = make_dyn_trait<noise_trait>(&d);
    static_assert(dyn_call(owner3, owner3.volume, 2) == 18);
+
+   consteval
+   {
+      cow cow2{};
+      const auto trait = make_mut_dyn_trait<noise_trait>(&cow2);
+      dyn_call(trait, trait.get_louder);
+      assert(dyn_call(trait, trait.volume, 1) == 2);
+   }
 }
