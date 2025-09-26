@@ -15,7 +15,7 @@ struct owning_dyn_noise_trait {
 private:
    struct base {
       constexpr virtual std::string_view get_noise() const noexcept = 0;
-      constexpr virtual int volume() const noexcept = 0;
+      constexpr virtual int volume(int) const noexcept = 0;
       constexpr virtual ~base() = default;
    };
 
@@ -25,7 +25,7 @@ private:
 
       constexpr std::string_view get_noise() const noexcept override { return value_.get_noise(); }
 
-      constexpr int volume() const noexcept override { return value_.volume(); }
+      constexpr int volume(int mult) const noexcept override { return value_.volume(mult); }
 
       constexpr ~derived() override = default;
 
@@ -43,21 +43,21 @@ public:
 
    constexpr std::string_view get_noise() const noexcept { return ptr_->get_noise(); }
 
-   constexpr int volume() const noexcept { return ptr_->volume(); }
+   constexpr int volume(int mult) const noexcept { return ptr_->volume(mult); }
 };
 
 // OWNING MANUAL VERSION 2
 
 struct dyn_noise_funcs_struct {
    std::string_view (*get_noise)(const void*) noexcept;
-   int (*volume)(const void*) noexcept;
+   int (*volume)(const void*, int) noexcept;
    void (*destroy)(void*) noexcept;
 };
 
 template<typename T>
 constexpr auto dyn_noise_funcs = dyn_noise_funcs_struct{
    [](const void* obj) noexcept { return static_cast<const T*>(obj)->get_noise(); },
-   [](const void* obj) noexcept { return static_cast<const T*>(obj)->volume(); },
+   [](const void* obj, int mult) noexcept { return static_cast<const T*>(obj)->volume(mult); },
    [](void* obj) noexcept { static_cast<T*>(obj)->~T(); },
 };
 
@@ -88,7 +88,7 @@ public:
       return (*get_funcs_ptr())->get_noise(data_.get() + sizeof(funcs_ptr));
    }
 
-   int volume() const noexcept { return (*get_funcs_ptr())->volume(data_.get() + sizeof(funcs_ptr)); }
+   int volume(int mult) const noexcept { return (*get_funcs_ptr())->volume(data_.get() + sizeof(funcs_ptr), mult); }
 
    ~owning_dyn_noise_trait_alt() { (*get_funcs_ptr())->destroy(data_.get() + sizeof(funcs_ptr)); }
 };
@@ -109,7 +109,7 @@ struct func_caller {
    }
 };
 
-using non_owning_noise_funcs_struct = tuple<std::string_view (*)(const void*), int (*)(const void*)>;
+using non_owning_noise_funcs_struct = tuple<std::string_view (*)(const void*), int (*)(const void*, int)>;
 
 struct non_owning_noise_trait {
 public:
@@ -120,7 +120,7 @@ public:
       : funcs_{define_static_object(
            non_owning_noise_funcs_struct{
               [](const void* c) -> decltype(auto) { return static_cast<const T*>(c)->get_noise(); },
-              [](const void* c) -> decltype(auto) { return static_cast<const T*>(c)->volume(); }})}
+              [](const void* c, int mult) -> decltype(auto) { return static_cast<const T*>(c)->volume(mult); }})}
       , data_{data}
    {}
 
@@ -223,6 +223,10 @@ consteval std::meta::info make_non_owning_dyn_trait(std::meta::info trait) noexc
 template<typename Trait>
 using non_owning_dyn_trait = [:make_non_owning_dyn_trait(^^Trait):];
 
+template<std::meta::info F, typename Class, typename... Args>
+constexpr auto produce_func_ptr
+   = [](const void* c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
+
 template<typename Trait, typename ToStore>
 consteval auto make_dyn_trait_pointers()
 {
@@ -249,11 +253,18 @@ consteval auto make_dyn_trait_pointers()
             template for (constexpr auto f : to_store_func)
             {
                if constexpr (std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I])) {
-                  // clang-format off
-                  return []<std::meta::info F>() -> [: func_ptrs[I] :] {
-                     return [](const void* c) -> decltype(auto) { return static_cast<const ToStore*>(c)->[:F:](); };
-                  }.template operator()<f>();
-                  // clang-format on
+                  static constexpr auto f2 = f;
+                  static constexpr auto to_ret = []() {
+                     std::vector<std::meta::info> args;
+                     args.push_back(std::meta::reflect_constant(f2));
+                     args.push_back(^^const ToStore*);
+                     for (const auto arg : std::meta::parameters_of(f)) {
+                        args.push_back(std::meta::type_of(arg));
+                     }
+
+                     return std::meta::substitute(^^produce_func_ptr, args);
+                  }();
+                  return [:to_ret:];
                }
             }
             throw "invalid name";
@@ -273,19 +284,19 @@ constexpr auto make_dyn_trait(const ToStore* ptr) noexcept
 
 struct noise_trait {
    std::string_view get_noise() const noexcept;
-   int volume() const noexcept;
+   int volume(int) const noexcept;
 };
 
 struct cow {
    constexpr std::string_view get_noise() const noexcept { return "moo"; }
-   constexpr int volume() const noexcept { return volume_; }
+   constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
 
    int volume_ = 1;
 };
 
 struct dog {
    constexpr std::string_view get_noise() const noexcept { return "arf"; }
-   constexpr int volume() const noexcept { return volume_; }
+   constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
 
    int volume_ = 9;
 };
@@ -293,11 +304,11 @@ struct dog {
 int main()
 {
    static_assert(owning_dyn_noise_trait{cow{}}.get_noise() == "moo");
-   static_assert(owning_dyn_noise_trait{dog{}}.volume() == 9);
+   static_assert(owning_dyn_noise_trait{dog{}}.volume(1) == 9);
 
    const auto test2 = owning_dyn_noise_trait_alt{cow{}};
    assert(test2.get_noise() == "moo");
-   assert(test2.volume() == 1);
+   assert(test2.volume(1) == 1);
 
    static constexpr cow c{};
    static constexpr dog d{};
@@ -308,5 +319,5 @@ int main()
    static_assert(dyn_call(owner2, owner2.get_noise) == "moo");
 
    static constexpr auto owner3 = make_dyn_trait<noise_trait>(&d);
-   static_assert(dyn_call(owner3, owner3.volume) == 9);
+   static_assert(dyn_call(owner3, owner3.volume, 2) == 18);
 }
