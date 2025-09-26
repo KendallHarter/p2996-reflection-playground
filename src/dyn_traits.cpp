@@ -99,7 +99,8 @@ public:
 // the first/the implicit this argument without tons of memory overhead and making it non-copyable, etc.
 
 // TODO: conditional noexcept
-template<std::size_t FuncIndex, bool IsConst>
+// We don't need TraitClass, but have it to prevent passing other dyn_trait functions
+template<typename TraitClass, std::size_t FuncIndex, bool IsConst>
 struct func_caller {
    template<typename Class, typename... Args>
       requires(IsConst)
@@ -145,13 +146,6 @@ struct func_caller {
 //    const void* data_;
 // };
 
-// TODO: Condition noexcept
-template<typename Trait, typename... T>
-constexpr auto dyn_call(Trait self, const auto to_call, T&&... args) noexcept
-{
-   return to_call.template call<Trait>(&self, std::forward<T>(args)...);
-}
-
 // AUTOMATIC NON-OWNING VERSION
 
 constexpr struct {
@@ -185,6 +179,9 @@ constexpr auto span_to_tuple(const std::span<const T, Size> sp)
 template<typename RetType, typename... Args>
 using func_ptr_maker = RetType (*)(Args...);
 
+template<typename RetType, typename... Args>
+using noexcept_func_ptr_maker = RetType (*)(Args...) noexcept;
+
 consteval std::meta::info
    member_func_to_non_member_func(std::meta::info f, std::meta::info trait, bool skip_first = false)
 {
@@ -202,7 +199,7 @@ consteval std::meta::info
    for (const auto i : std::meta::parameters_of(f) | std::views::drop(skip_first)) {
       infos.push_back(std::meta::type_of(i));
    }
-   return std::meta::substitute(^^func_ptr_maker, infos);
+   return std::meta::substitute(std::meta::is_noexcept(f) ? ^^noexcept_func_ptr_maker : ^^func_ptr_maker, infos);
 }
 
 consteval auto get_members_and_tuple_type(std::meta::info trait)
@@ -230,7 +227,9 @@ consteval auto get_members_and_tuple_type(std::meta::info trait)
             std::meta::data_member_spec(
                std::meta::substitute(
                   ^^func_caller,
-                  {std::meta::reflect_constant(index), std::meta::reflect_constant(std::meta::is_const(f))}),
+                  {trait,
+                   std::meta::reflect_constant(index),
+                   std::meta::reflect_constant(std::meta::is_const(f) || std::meta::is_static_member(f))}),
                {.name = std::meta::identifier_of(f), .no_unique_address = true})));
       index += 1;
       func_ptrs.push_back(member_func_to_non_member_func(f, trait));
@@ -252,19 +251,28 @@ consteval std::meta::info make_non_owning_dyn_trait(std::meta::info trait, bool 
 }
 
 template<typename Trait, bool IsConst>
-using non_owning_dyn_trait = [:make_non_owning_dyn_trait(^^Trait, IsConst):];
+using non_owning_dyn_trait_impl = [:make_non_owning_dyn_trait(^^Trait, IsConst):];
+
+// Something about the previous type alias inhibits argument deduction
+// So do this dumb workaround instead
+template<typename Trait, bool IsConst>
+struct non_owning_dyn_trait : non_owning_dyn_trait_impl<Trait, IsConst> {};
 
 template<std::meta::info F, typename Ptr, typename Class, typename... Args>
 constexpr auto produce_func_ptr
-   = +[](Ptr c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
+   = +[](Ptr c, Args... args) noexcept(noexcept(static_cast<Class>(c)->[:F:](args...))) -> decltype(auto) {
+   return static_cast<Class>(c)->[:F:](args...);
+};
 
 template<std::meta::info F, typename Trait, typename Ptr, typename Class, typename... Args>
 constexpr auto produce_default_func_ptr
-   = +[](Ptr c, Args... args) -> decltype(auto) { return Trait{}.[:F:](*static_cast<Class>(c), args...); };
+   = +[](Ptr c, Args... args) noexcept(noexcept(Trait{}.[:F:](*static_cast<Class>(c), args...))) -> decltype(auto) {
+   return Trait{}.[:F:](*static_cast<Class>(c), args...);
+};
 
 template<std::meta::info F, typename... Args>
 constexpr auto produce_default_static_func_ptr
-   = +[](const void*, Args... args) -> decltype(auto) { return [:F:](args...); };
+   = +[](const void*, Args... args) noexcept(noexcept([:F:](args...))) -> decltype(auto) { return [:F:](args...); };
 
 template<typename Trait, typename ToStore>
 consteval auto make_dyn_trait_pointers()
@@ -370,14 +378,25 @@ template<typename DynTrait, typename ToStore>
 constexpr auto make_dyn_trait(const ToStore* ptr) noexcept
 {
    return non_owning_dyn_trait<DynTrait, true>{
-      .data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())};
+      {.data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())}};
 }
 
 template<typename DynTrait, typename ToStore>
 constexpr auto make_mut_dyn_trait(ToStore* ptr) noexcept
 {
    return non_owning_dyn_trait<DynTrait, false>{
-      .data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())};
+      {.data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())}};
+}
+
+template<typename Trait, bool ConstSelf, std::size_t FuncIndex, bool ConstFunc, typename... T>
+constexpr auto dyn_call(
+   non_owning_dyn_trait<Trait, ConstSelf> self,
+   func_caller<Trait, FuncIndex, ConstFunc> to_call,
+   T&&... args) noexcept(noexcept(to_call
+                                     .template call<non_owning_dyn_trait<Trait, ConstSelf>>(
+                                        &self, std::forward<T>(args)...)))
+{
+   return to_call.template call<non_owning_dyn_trait<Trait, ConstSelf>>(&self, std::forward<T>(args)...);
 }
 
 // USING THEM
@@ -431,6 +450,7 @@ int main()
 
    static constexpr auto owner2 = make_dyn_trait<noise_trait>(&c);
    static_assert(dyn_call(owner2, owner2.get_noise) == "moo");
+   static_assert(noexcept(dyn_call(owner2, owner2.get_noise)));
 
    static constexpr auto owner3 = make_dyn_trait<noise_trait>(&d);
    static_assert(dyn_call(owner3, owner3.volume, 2) == 18);
