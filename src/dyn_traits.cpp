@@ -185,9 +185,13 @@ constexpr auto span_to_tuple(const std::span<const T, Size> sp)
 template<typename RetType, typename... Args>
 using func_ptr_maker = RetType (*)(Args...);
 
-consteval std::meta::info member_func_to_non_member_func(std::meta::info f)
+consteval std::meta::info
+   member_func_to_non_member_func(std::meta::info f, std::meta::info trait, bool skip_first = false)
 {
    std::vector<std::meta::info> infos;
+   if (std::meta::is_function_template(f)) {
+      return member_func_to_non_member_func(std::meta::substitute(f, {trait}), trait, true);
+   }
    infos.push_back(std::meta::return_type_of(f));
    if (std::meta::is_const(f) || std::meta::is_static_member(f)) {
       infos.push_back(^^const void*);
@@ -195,7 +199,7 @@ consteval std::meta::info member_func_to_non_member_func(std::meta::info f)
    else {
       infos.push_back(^^void*);
    }
-   for (const auto i : std::meta::parameters_of(f)) {
+   for (const auto i : std::meta::parameters_of(f) | std::views::drop(skip_first)) {
       infos.push_back(std::meta::type_of(i));
    }
    return std::meta::substitute(^^func_ptr_maker, infos);
@@ -204,15 +208,23 @@ consteval std::meta::info member_func_to_non_member_func(std::meta::info f)
 consteval auto get_members_and_tuple_type(std::meta::info trait)
    -> std::pair<std::vector<std::meta::info>, std::vector<std::meta::info>>
 {
-   auto funcs = std::meta::members_of(trait, std::meta::access_context::current())
-              | std::views::filter(std::meta::is_function) | std::views::filter(std::not_fn(std::meta::is_constructor))
-              | std::views::filter(std::not_fn(std::meta::is_operator_function))
-              | std::views::filter(std::not_fn(std::meta::is_destructor));
+   auto funcs
+      = std::meta::members_of(trait, std::meta::access_context::current())
+      | std::views::filter([](auto x) { return std::meta::is_function_template(x) || std::meta::is_function(x); })
+      | std::views::filter(std::not_fn(std::meta::is_constructor))
+      | std::views::filter(std::not_fn(std::meta::is_operator_function))
+      | std::views::filter(std::not_fn(std::meta::is_destructor));
 
    std::vector<std::meta::info> members;
    std::vector<std::meta::info> func_ptrs;
    int index = 0;
    for (const auto f : funcs) {
+      if (std::meta::is_function_template(f)) {
+         // This is std::meta::annotations_of_with_type in C++26
+         const auto is_default_impl
+            = !std::meta::annotations_of(std::meta::substitute(f, {trait}), ^^decltype(default_impl)).empty();
+         assert(is_default_impl && "Templated functions can only be used for default implementations");
+      }
       members.push_back(
          std::meta::reflect_constant(
             std::meta::data_member_spec(
@@ -221,7 +233,7 @@ consteval auto get_members_and_tuple_type(std::meta::info trait)
                   {std::meta::reflect_constant(index), std::meta::reflect_constant(std::meta::is_const(f))}),
                {.name = std::meta::identifier_of(f), .no_unique_address = true})));
       index += 1;
-      func_ptrs.push_back(member_func_to_non_member_func(f));
+      func_ptrs.push_back(member_func_to_non_member_func(f, trait));
    }
    return {members, func_ptrs};
 }
@@ -244,25 +256,32 @@ using non_owning_dyn_trait = [:make_non_owning_dyn_trait(^^Trait, IsConst):];
 
 template<std::meta::info F, typename Ptr, typename Class, typename... Args>
 constexpr auto produce_func_ptr
-   = [](Ptr c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
+   = +[](Ptr c, Args... args) -> decltype(auto) { return static_cast<Class>(c)->[:F:](args...); };
+
+template<std::meta::info F, typename Trait, typename Ptr, typename Class, typename... Args>
+constexpr auto produce_default_func_ptr
+   = +[](Ptr c, Args... args) -> decltype(auto) { return Trait{}.[:F:](*static_cast<Class>(c), args...); };
 
 template<std::meta::info F, typename... Args>
 constexpr auto produce_default_static_func_ptr
-   = [](const void*, Args... args) -> decltype(auto) { return [:F:](args...); };
+   = +[](const void*, Args... args) -> decltype(auto) { return [:F:](args...); };
 
 template<typename Trait, typename ToStore>
 consteval auto make_dyn_trait_pointers()
 {
    static constexpr auto func_ptrs = std::define_static_array(get_members_and_tuple_type(^^Trait).second);
    static constexpr auto trait_funcs = std::define_static_array(
-      std::meta::members_of(^^Trait, std::meta::access_context::current()) | std::views::filter(std::meta::is_function)
+      std::meta::members_of(^^Trait, std::meta::access_context::current())
+      | std::views::filter([](auto x) { return std::meta::is_function_template(x) || std::meta::is_function(x); })
       | std::views::filter(std::not_fn(std::meta::is_constructor))
       | std::views::filter(std::not_fn(std::meta::is_operator_function))
       | std::views::filter(std::not_fn(std::meta::is_destructor)));
 
    static constexpr auto to_store_func = std::define_static_array(
       std::meta::members_of(^^ToStore, std::meta::access_context::current())
-      | std::views::filter(std::meta::is_function) | std::views::filter(std::not_fn(std::meta::is_constructor))
+
+      | std::views::filter([](auto x) { return std::meta::is_function_template(x) || std::meta::is_function(x); })
+      | std::views::filter(std::not_fn(std::meta::is_constructor))
       | std::views::filter(std::not_fn(std::meta::is_operator_function))
       | std::views::filter(std::not_fn(std::meta::is_destructor)));
 
@@ -271,7 +290,7 @@ consteval auto make_dyn_trait_pointers()
    return []<std::size_t... Is>(std::index_sequence<Is...>) {
       return ret_type {
          // clang-format off
-         []<std::size_t I>() -> [: func_ptrs[I] :] {
+         []<std::size_t I>() -> [:func_ptrs[I]:] {
             // clang-format on
             static constexpr auto produce_func_ptr_from_info = [](std::meta::info func_info) {
                std::vector<std::meta::info> args;
@@ -297,11 +316,39 @@ consteval auto make_dyn_trait_pointers()
                }
             }
             // Default implementation
-            // This is std::meta::annotations_of_with_type in C++26
             static constexpr auto f = trait_funcs[I];
-            static constexpr auto is_default = !std::meta::annotations_of(f, ^^decltype(default_impl)).empty();
-            if constexpr (is_default) {
-               if constexpr (std::meta::is_static_member(trait_funcs[I])) {
+            if constexpr (std::meta::is_function_template(f)) {
+               // This is std::meta::annotations_of_with_type in C++26
+               static constexpr auto f_sub = std::meta::substitute(f, {^^ToStore});
+               static constexpr auto is_default = !std::meta::annotations_of(f_sub, ^^decltype(default_impl)).empty();
+               static_assert(is_default, "Function templates must be default implementations");
+
+               static constexpr auto to_ret = []() {
+                  std::vector<std::meta::info> args;
+                  args.push_back(std::meta::reflect_constant(f_sub));
+                  args.push_back(^^Trait);
+                  if (std::meta::is_const(f_sub)) {
+                     args.push_back(^^const void*);
+                     args.push_back(^^const ToStore*);
+                  }
+                  else {
+                     args.push_back(^^void*);
+                     args.push_back(^^ToStore*);
+                  }
+                  // ignore the first argument (it is basically an explicit this)
+                  for (const auto arg : std::meta::parameters_of(f_sub) | std::views::drop(1)) {
+                     args.push_back(std::meta::type_of(arg));
+                  }
+
+                  return std::meta::substitute(^^produce_default_func_ptr, args);
+               }();
+
+               return [:to_ret:];
+            }
+            else {
+               // This is std::meta::annotations_of_with_type in C++26
+               static constexpr auto is_default = !std::meta::annotations_of(f, ^^decltype(default_impl)).empty();
+               if constexpr (is_default && std::meta::is_static_member(trait_funcs[I])) {
                   static constexpr auto to_ret = []() {
                      std::vector<std::meta::info> args;
                      args.push_back(std::meta::reflect_constant(f));
@@ -342,6 +389,13 @@ struct noise_trait {
 
    int volume(int) const noexcept;
    void get_louder() noexcept;
+
+   template<typename T>
+   [[= default_impl]] constexpr void get_louder_twice(T& obj) noexcept
+   {
+      obj.get_louder();
+      obj.get_louder();
+   }
 };
 
 struct cow {
@@ -389,5 +443,7 @@ int main()
       dyn_call(trait, trait.get_louder);
       assert(dyn_call(trait, trait.volume, 1) == 2);
       assert(dyn_call(trait, trait.get_secondary_noise) == "(none)");
+      dyn_call(trait, trait.get_louder_twice);
+      assert(dyn_call(trait, trait.volume, 1) == 4);
    }
 }
