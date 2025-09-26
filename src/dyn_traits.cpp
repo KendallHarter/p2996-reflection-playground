@@ -270,7 +270,9 @@ consteval auto make_dyn_trait_pointers()
 
    return []<std::size_t... Is>(std::index_sequence<Is...>) {
       return ret_type {
-         []<std::size_t I>() -> [ : func_ptrs[I] : ] {
+         // clang-format off
+         []<std::size_t I>() -> [: func_ptrs[I] :] {
+            // clang-format on
             static constexpr auto produce_func_ptr_from_info = [](std::meta::info func_info) {
                std::vector<std::meta::info> args;
                args.push_back(std::meta::reflect_constant(func_info));
