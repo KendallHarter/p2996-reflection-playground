@@ -244,7 +244,6 @@ consteval auto make_dyn_trait_pointers()
    using ret_type = [:std::meta::substitute(^^tuple, func_ptrs):];
 
    return []<std::size_t... Is>(std::index_sequence<Is...>) {
-      ;
       return ret_type {
          []<std::size_t I>() {
             template for (constexpr auto f : to_store_func)
