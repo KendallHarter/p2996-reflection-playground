@@ -1,6 +1,7 @@
 #ifndef COMMON_HPP
 #define COMMON_HPP
 
+#include <algorithm>
 #include <cstdint>
 #include <experimental/meta>
 #include <ranges>
@@ -108,5 +109,8 @@ template<typename T>
 struct tdef {
    using type = T;
 };
+
+// define_constant_object isn't in <meta> for some reason so lazily implement it here
+consteval auto define_static_object(const auto& obj) { return &::define_static_array(std::initializer_list{obj})[0]; }
 
 #endif // COMMON_HPP

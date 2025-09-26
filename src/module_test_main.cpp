@@ -1,6 +1,5 @@
 import module_test;
 
-#include <experimental/meta>
 #include <print>
 #include <unordered_map>
 
