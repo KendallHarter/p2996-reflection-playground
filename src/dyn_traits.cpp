@@ -413,11 +413,10 @@ consteval auto make_dyn_trait_pointers()
                                             ? std::meta::substitute(trait_funcs[I], {^^ToStore})
                                             : trait_funcs[I];
                      const auto params1 = std::meta::parameters_of(f);
-                     const std::vector<std::meta::info> params2 = [&]() {
-                        return std::meta::parameters_of(cur_func)
-                             | std::views::drop(static_cast<int>(cur_func != trait_funcs[I]))
-                             | std::ranges::to<std::vector>();
-                     }();
+                     const std::vector<std::meta::info> params2
+                        = std::meta::parameters_of(cur_func)
+                        | std::views::drop(static_cast<int>(cur_func != trait_funcs[I]))
+                        | std::ranges::to<std::vector>();
 
                      if (params1.size() != params2.size()) {
                         return false;
