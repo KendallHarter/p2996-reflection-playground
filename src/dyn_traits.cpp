@@ -478,7 +478,7 @@ constexpr auto make_dyn_trait(const ToStore* ptr) noexcept
 }
 
 template<typename DynTrait, typename ToStore>
-constexpr auto make_mut_dyn_trait(ToStore* ptr) noexcept
+constexpr auto make_dyn_trait(ToStore* ptr) noexcept
 {
    return non_owning_dyn_trait<DynTrait, false>{
       {.data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())}};
@@ -561,7 +561,7 @@ int main()
    consteval
    {
       cow cow2{};
-      const auto trait = make_mut_dyn_trait<noise_trait>(&cow2);
+      const auto trait = make_dyn_trait<noise_trait>(&cow2);
       dyn_call(trait, trait.get_louder);
       assert(dyn_call(trait, trait.volume, 1) == 2);
       assert(dyn_call(trait, trait.get_secondary_noise) == "(none)");
