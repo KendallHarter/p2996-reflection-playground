@@ -407,13 +407,13 @@ consteval auto make_dyn_trait_pointers()
             };
             template for (constexpr auto f : to_store_func)
             {
-               static constexpr bool params_match = []() consteval {
+               static constexpr bool func_signatures_match = []() consteval {
+                  const auto cur_func = std::meta::is_function_template(trait_funcs[I])
+                                         ? std::meta::substitute(trait_funcs[I], {^^ToStore})
+                                         : trait_funcs[I];
                   if constexpr (!std::meta::is_function_template(f)) {
                      const auto params1 = std::meta::parameters_of(f);
-                     const std::vector<std::meta::info> params2 = []() {
-                        const auto cur_func = std::meta::is_function_template(trait_funcs[I])
-                                               ? std::meta::substitute(trait_funcs[I], {^^ToStore})
-                                               : trait_funcs[I];
+                     const std::vector<std::meta::info> params2 = [&]() {
                         return std::meta::parameters_of(cur_func)
                              | std::views::drop(static_cast<int>(cur_func != trait_funcs[I]))
                              | std::ranges::to<std::vector>();
@@ -430,11 +430,10 @@ consteval auto make_dyn_trait_pointers()
                      }
                   }
 
-                  return true;
+                  return std::meta::return_type_of(f) == std::meta::return_type_of(cur_func);
                }();
                if constexpr (
-                  std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I])
-                  && std::meta::return_type_of(f) == std::meta::return_type_of(trait_funcs[I]) && params_match) {
+                  std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I]) && func_signatures_match) {
                   return [:produce_func_ptr_from_info(f, ^^produce_func_ptr):];
                }
             }
@@ -500,7 +499,12 @@ struct noise_trait {
 
    [[= default_impl]] static constexpr std::string_view get_secondary_noise() noexcept { return "(none)"; }
 
-   int volume() const noexcept;
+   template<typename T>
+   [[= default_impl]] constexpr int volume(const T& obj) const noexcept
+   {
+      return obj.volume(1);
+   }
+
    int volume(int) const noexcept;
    void get_louder() noexcept;
 
@@ -514,7 +518,6 @@ struct noise_trait {
 
 struct cow {
    static constexpr std::string_view get_noise() noexcept { return "moo"; }
-   constexpr int volume() const noexcept { return volume_; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ += 1; }
 
@@ -524,7 +527,6 @@ struct cow {
 struct dog {
    static constexpr std::string_view get_noise() noexcept { return "arf"; }
    static constexpr std::string_view get_secondary_noise() noexcept { return "bark"; }
-   constexpr int volume() const noexcept { return volume_; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ *= 2; }
 
