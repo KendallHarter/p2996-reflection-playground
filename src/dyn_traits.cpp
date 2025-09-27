@@ -408,10 +408,10 @@ consteval auto make_dyn_trait_pointers()
             template for (constexpr auto f : to_store_func)
             {
                static constexpr bool func_signatures_match = []() consteval {
-                  const auto cur_func = std::meta::is_function_template(trait_funcs[I])
-                                         ? std::meta::substitute(trait_funcs[I], {^^ToStore})
-                                         : trait_funcs[I];
                   if constexpr (!std::meta::is_function_template(f)) {
+                     const auto cur_func = std::meta::is_function_template(trait_funcs[I])
+                                            ? std::meta::substitute(trait_funcs[I], {^^ToStore})
+                                            : trait_funcs[I];
                      const auto params1 = std::meta::parameters_of(f);
                      const std::vector<std::meta::info> params2 = [&]() {
                         return std::meta::parameters_of(cur_func)
@@ -428,9 +428,11 @@ consteval auto make_dyn_trait_pointers()
                            return false;
                         }
                      }
+
+                     return std::meta::return_type_of(f) == std::meta::return_type_of(cur_func);
                   }
 
-                  return std::meta::return_type_of(f) == std::meta::return_type_of(cur_func);
+                  return false;
                }();
                if constexpr (
                   std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I]) && func_signatures_match) {
