@@ -113,4 +113,9 @@ struct tdef {
 // define_constant_object isn't in <meta> for some reason so lazily implement it here
 consteval auto define_static_object(const auto& obj) { return &::define_static_array(std::initializer_list{obj})[0]; }
 
+template<typename... T>
+struct overload_set : T... {
+   using T::operator()...;
+};
+
 #endif // COMMON_HPP

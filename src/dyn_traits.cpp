@@ -93,63 +93,6 @@ public:
    ~owning_dyn_noise_trait_alt() { (*get_funcs_ptr())->destroy(data_.get() + sizeof(funcs_ptr)); }
 };
 
-// VARIABLE BASED NON-OWNING VERSION
-
-// I don't think there's a good way of doing this with a clean format because there's no way to pass
-// the first/the implicit this argument without tons of memory overhead and making it non-copyable, etc.
-
-// TODO: conditional noexcept
-// We don't need TraitClass, but have it to prevent passing other dyn_trait functions
-template<typename TraitClass, std::size_t FuncIndex, bool IsConst>
-struct func_caller {
-   template<typename Class, typename... Args>
-      requires(IsConst)
-   static constexpr decltype(auto) call(const void* c, Args&&... args) noexcept(
-      noexcept((static_cast<const Class*>(c)->funcs_->template get<FuncIndex>())(
-         static_cast<const Class*>(c)->data_, std::forward<Args>(args)...)))
-   {
-      const auto* const ptr = static_cast<const Class*>(c);
-      return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
-   }
-
-   template<typename Class, typename... Args>
-      requires(!IsConst)
-   static constexpr decltype(auto)
-      call(void* c, Args&&... args) noexcept(noexcept((static_cast<Class*>(c)->funcs_->template get<FuncIndex>())(
-         static_cast<Class*>(c)->data_, std::forward<Args>(args)...)))
-   {
-      auto* const ptr = static_cast<Class*>(c);
-      return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
-   }
-};
-
-// Commenting out since future changes will probably break this
-// using non_owning_noise_funcs_struct = tuple<std::string_view (*)(const void*), int (*)(const void*, int)>;
-
-// struct non_owning_noise_trait {
-// public:
-//    non_owning_noise_trait() = delete;
-
-//    template<typename T>
-//    constexpr explicit non_owning_noise_trait(const T* data)
-//       : funcs_{define_static_object(
-//            non_owning_noise_funcs_struct{
-//               [](const void* c) -> decltype(auto) { return static_cast<const T*>(c)->get_noise(); },
-//               [](const void* c, int mult) -> decltype(auto) { return static_cast<const T*>(c)->volume(mult); }})}
-//       , data_{data}
-//    {}
-
-//    [[no_unique_address]] func_caller<0, true> get_noise;
-//    [[no_unique_address]] func_caller<1, true> volume;
-
-// private:
-//    template<std::size_t, bool>
-//    friend struct func_caller;
-
-//    const non_owning_noise_funcs_struct* funcs_;
-//    const void* data_;
-// };
-
 // AUTOMATIC NON-OWNING VERSION
 
 constexpr struct {
@@ -206,37 +149,178 @@ consteval std::meta::info
    return std::meta::substitute(std::meta::is_noexcept(f) ? ^^noexcept_func_ptr_maker : ^^func_ptr_maker, infos);
 }
 
+consteval auto get_sorted_funcs_by_name(std::meta::info c) -> std::vector<std::meta::info>
+{
+   auto f = std::meta::members_of(c, std::meta::access_context::current())
+          | std::views::filter([](auto x) { return std::meta::is_function_template(x) || std::meta::is_function(x); })
+          | std::views::filter(std::not_fn(std::meta::is_constructor))
+          | std::views::filter(std::not_fn(std::meta::is_operator_function))
+          | std::views::filter(std::not_fn(std::meta::is_destructor)) | std::ranges::to<std::vector>();
+
+   // This should really be using stable_sort, but Clang currently doesn't support it in constexpr contexts
+   // This should be OK because it's always going in in the same order though.
+   std::ranges::sort(f, {}, [](auto x) { return std::meta::identifier_of(x); });
+
+   return f;
+}
+
+consteval auto partition_sorted_funcs_by_name(const std::span<const std::meta::info> funcs)
+   -> std::vector<std::vector<std::meta::info>>
+{
+   std::vector<std::vector<std::meta::info>> to_ret;
+   to_ret.emplace_back();
+
+   auto cur_name = std::meta::identifier_of(funcs[0]);
+
+   for (const auto f : funcs) {
+      if (cur_name != std::meta::identifier_of(f)) {
+         to_ret.emplace_back();
+         cur_name = std::meta::identifier_of(f);
+      }
+      to_ret.back().push_back(f);
+   }
+
+   return to_ret;
+}
+
+// We don't need TraitClass, but have it to prevent passing other dyn_trait functions
+template<typename TraitClass, auto... Rest>
+struct func_caller;
+
+template<typename TraitClass, std::size_t FuncIndex>
+struct func_caller<TraitClass, FuncIndex> {
+   template<typename Class, typename... Args>
+   static constexpr auto operator()(const void* c, Args&&... args) noexcept(
+      noexcept((static_cast<const Class*>(c)->funcs_->template get<FuncIndex>())(
+         static_cast<const Class*>(c)->data_, std::forward<Args>(args)...))) -> decltype(auto)
+   {
+      const auto* const ptr = static_cast<const Class*>(c);
+      return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
+   }
+
+   template<typename Class, typename... Args>
+   static constexpr auto
+      operator()(void* c, Args&&... args) noexcept(noexcept((static_cast<Class*>(c)->funcs_->template get<FuncIndex>())(
+         static_cast<Class*>(c)->data_, std::forward<Args>(args)...))) -> decltype(auto)
+   {
+      auto* const ptr = static_cast<Class*>(c);
+      return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
+   }
+};
+
+template<std::size_t Index, typename FuncType>
+struct func_caller_helper;
+
+template<std::size_t Index, typename RetType, typename... Args>
+struct func_caller_helper<Index, RetType (*)(Args...)> {
+   static consteval auto operator()(Args...) noexcept -> std::integral_constant<std::size_t, Index>;
+};
+
+template<std::size_t Index, typename RetType, typename... Args>
+struct func_caller_helper<Index, RetType (*)(Args...) noexcept> {
+   static consteval auto operator()(Args...) noexcept -> std::integral_constant<std::size_t, Index>;
+};
+
+// trying to do this with a fixed_string resulted in it using the primary template for some reason
+// const char* seems to work and since this is internally used only it doesn't really matter
+template<typename TraitClass, std::size_t StartIndex, const char* Name>
+struct func_caller<TraitClass, StartIndex, Name> {
+   static constexpr std::span<const std::meta::info> funcs = []() consteval -> std::span<const std::meta::info> {
+      static constexpr auto funcs = std::define_static_array(get_sorted_funcs_by_name(^^TraitClass));
+      const auto sorted_funcs = partition_sorted_funcs_by_name(funcs);
+
+      for (const auto& f : sorted_funcs) {
+         if (std::meta::identifier_of(f.front()) == Name) {
+            return std::define_static_array(f);
+         }
+      }
+
+      return {};
+   }();
+
+   static_assert(!funcs.empty(), "No matching function name");
+
+   static constexpr auto get_indexer = []() consteval {
+      return []<std::size_t... I>(std::index_sequence<I...>) {
+         return overload_set{func_caller_helper<
+            StartIndex + I,
+            typename[:member_func_to_non_member_func(funcs[I], ^^TraitClass):]>{}...};
+      }(std::make_index_sequence<funcs.size()>{});
+   }();
+
+   template<typename Class, typename... Args>
+   static constexpr decltype(auto) operator()(const void* c, Args&&... args) noexcept(noexcept((
+      static_cast<const Class*>(c)
+         ->funcs_->template get<decltype(get_indexer(std::declval<const Class*>(), std::declval<Args>()...))::value>())(
+      static_cast<const Class*>(c)->data_, std::forward<Args>(args)...)))
+   {
+      const auto* const ptr = static_cast<const Class*>(c);
+      return (ptr->funcs_
+                 ->template get<decltype(get_indexer(std::declval<const Class*>(), std::declval<Args>()...))::value>())(
+         ptr->data_, std::forward<Args>(args)...);
+   }
+
+   template<typename Class, typename... Args>
+   static constexpr decltype(auto) operator()(void* c, Args&&... args) noexcept(noexcept((
+      static_cast<Class*>(c)
+         ->funcs_->template get<decltype(get_indexer(std::declval<const Class*>(), std::declval<Args>()...))::value>())(
+      static_cast<Class*>(c)->data_, std::forward<Args>(args)...)))
+   {
+      auto* const ptr = static_cast<Class*>(c);
+
+      return (ptr->funcs_
+                 ->template get<decltype(get_indexer(std::declval<const Class*>(), std::declval<Args>()...))::value>())(
+         ptr->data_, std::forward<Args>(args)...);
+   }
+};
+
 consteval auto get_members_and_tuple_type(std::meta::info trait)
    -> std::pair<std::vector<std::meta::info>, std::vector<std::meta::info>>
 {
-   auto funcs
-      = std::meta::members_of(trait, std::meta::access_context::current())
-      | std::views::filter([](auto x) { return std::meta::is_function_template(x) || std::meta::is_function(x); })
-      | std::views::filter(std::not_fn(std::meta::is_constructor))
-      | std::views::filter(std::not_fn(std::meta::is_operator_function))
-      | std::views::filter(std::not_fn(std::meta::is_destructor));
-
+   const auto funcs_by_name = partition_sorted_funcs_by_name(get_sorted_funcs_by_name(trait));
    std::vector<std::meta::info> members;
    std::vector<std::meta::info> func_ptrs;
-   int index = 0;
-   for (const auto f : funcs) {
-      if (std::meta::is_function_template(f)) {
-         // This is std::meta::annotations_of_with_type in C++26
-         const auto is_default_impl
-            = !std::meta::annotations_of(std::meta::substitute(f, {trait}), ^^decltype(default_impl)).empty();
-         assert(is_default_impl && "Templated functions can only be used for default implementations");
+   std::size_t index = 0;
+   for (const auto funcs : funcs_by_name) {
+      if (funcs.size() == 1) {
+         // No overloads, just a single function
+         const auto f = funcs.front();
+         if (std::meta::is_function_template(f)) {
+            // This is std::meta::annotations_of_with_type in C++26
+            const auto is_default_impl
+               = !std::meta::annotations_of(std::meta::substitute(f, {trait}), ^^decltype(default_impl)).empty();
+            assert(is_default_impl && "Templated functions can only be used for default implementations");
+         }
+         members.push_back(
+            std::meta::reflect_constant(
+               std::meta::data_member_spec(
+                  std::meta::substitute(^^func_caller, {trait, std::meta::reflect_constant(index)}),
+                  {.name = std::meta::identifier_of(f), .no_unique_address = true})));
+         index += 1;
+         func_ptrs.push_back(member_func_to_non_member_func(f, trait));
       }
-      members.push_back(
-         std::meta::reflect_constant(
-            std::meta::data_member_spec(
-               std::meta::substitute(
-                  ^^func_caller,
-                  {trait,
-                   std::meta::reflect_constant(index),
-                   std::meta::reflect_constant(std::meta::is_const(f) || std::meta::is_static_member(f))}),
-               {.name = std::meta::identifier_of(f), .no_unique_address = true})));
-      index += 1;
-      func_ptrs.push_back(member_func_to_non_member_func(f, trait));
+      else {
+         // Oh no, there's an overload; gotta handle it
+         for (const auto& f : funcs) {
+            if (std::meta::is_function_template(f)) {
+               // This is std::meta::annotations_of_with_type in C++26
+               const auto is_default_impl
+                  = !std::meta::annotations_of(std::meta::substitute(f, {trait}), ^^decltype(default_impl)).empty();
+               assert(is_default_impl && "Templated functions can only be used for default implementations");
+            }
+            func_ptrs.push_back(member_func_to_non_member_func(f, trait));
+         }
+         members.push_back(
+            std::meta::reflect_constant(
+               std::meta::data_member_spec(
+                  std::meta::substitute(
+                     ^^func_caller,
+                     {trait,
+                      std::meta::reflect_constant(index),
+                      ::reflect_constant_string(std::meta::identifier_of(funcs.front()))}),
+                  {.name = std::meta::identifier_of(funcs.front()), .no_unique_address = true})));
+         index += funcs.size();
+      }
    }
    return {members, func_ptrs};
 }
@@ -282,12 +366,7 @@ template<typename Trait, typename ToStore>
 consteval auto make_dyn_trait_pointers()
 {
    static constexpr auto func_ptrs = std::define_static_array(get_members_and_tuple_type(^^Trait).second);
-   static constexpr auto trait_funcs = std::define_static_array(
-      std::meta::members_of(^^Trait, std::meta::access_context::current())
-      | std::views::filter([](auto x) { return std::meta::is_function_template(x) || std::meta::is_function(x); })
-      | std::views::filter(std::not_fn(std::meta::is_constructor))
-      | std::views::filter(std::not_fn(std::meta::is_operator_function))
-      | std::views::filter(std::not_fn(std::meta::is_destructor)));
+   static constexpr auto trait_funcs = std::define_static_array(get_sorted_funcs_by_name(^^Trait));
 
    static constexpr auto to_store_func = std::define_static_array(
       std::meta::members_of(^^ToStore, std::meta::access_context::current())
@@ -328,7 +407,34 @@ consteval auto make_dyn_trait_pointers()
             };
             template for (constexpr auto f : to_store_func)
             {
-               if constexpr (std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I])) {
+               static constexpr bool params_match = []() consteval {
+                  if constexpr (!std::meta::is_function_template(f)) {
+                     const auto params1 = std::meta::parameters_of(f);
+                     const std::vector<std::meta::info> params2 = []() {
+                        const auto cur_func = std::meta::is_function_template(trait_funcs[I])
+                                               ? std::meta::substitute(trait_funcs[I], {^^ToStore})
+                                               : trait_funcs[I];
+                        return std::meta::parameters_of(cur_func)
+                             | std::views::drop(static_cast<int>(cur_func != trait_funcs[I]))
+                             | std::ranges::to<std::vector>();
+                     }();
+
+                     if (params1.size() != params2.size()) {
+                        return false;
+                     }
+
+                     for (std::size_t i = 0; i < params1.size(); ++i) {
+                        if (std::meta::type_of(params1[i]) != std::meta::type_of(params2[i])) {
+                           return false;
+                        }
+                     }
+                  }
+
+                  return true;
+               }();
+               if constexpr (
+                  std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I])
+                  && std::meta::return_type_of(f) == std::meta::return_type_of(trait_funcs[I]) && params_match) {
                   return [:produce_func_ptr_from_info(f, ^^produce_func_ptr):];
                }
             }
@@ -377,15 +483,14 @@ constexpr auto make_mut_dyn_trait(ToStore* ptr) noexcept
       {.data_ = ptr, .funcs_ = ::define_static_object(make_dyn_trait_pointers<DynTrait, ToStore>())}};
 }
 
-template<typename Trait, bool ConstSelf, std::size_t FuncIndex, bool ConstFunc, typename... T>
+template<typename Trait, bool ConstSelf, auto... FuncCallerRest, typename... T>
 constexpr auto dyn_call(
    non_owning_dyn_trait<Trait, ConstSelf> self,
-   func_caller<Trait, FuncIndex, ConstFunc> to_call,
-   T&&... args) noexcept(noexcept(to_call
-                                     .template call<non_owning_dyn_trait<Trait, ConstSelf>>(
-                                        &self, std::forward<T>(args)...)))
+   func_caller<Trait, FuncCallerRest...> to_call,
+   T&&... args) noexcept(noexcept(to_call.template
+                                  operator()<non_owning_dyn_trait<Trait, ConstSelf>>(&self, std::forward<T>(args)...)))
 {
-   return to_call.template call<non_owning_dyn_trait<Trait, ConstSelf>>(&self, std::forward<T>(args)...);
+   return to_call.template operator()<non_owning_dyn_trait<Trait, ConstSelf>>(&self, std::forward<T>(args)...);
 }
 
 // USING THEM
@@ -395,6 +500,7 @@ struct noise_trait {
 
    [[= default_impl]] static constexpr std::string_view get_secondary_noise() noexcept { return "(none)"; }
 
+   int volume() const noexcept;
    int volume(int) const noexcept;
    void get_louder() noexcept;
 
@@ -408,6 +514,7 @@ struct noise_trait {
 
 struct cow {
    static constexpr std::string_view get_noise() noexcept { return "moo"; }
+   constexpr int volume() const noexcept { return volume_; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ += 1; }
 
@@ -417,6 +524,7 @@ struct cow {
 struct dog {
    static constexpr std::string_view get_noise() noexcept { return "arf"; }
    static constexpr std::string_view get_secondary_noise() noexcept { return "bark"; }
+   constexpr int volume() const noexcept { return volume_; }
    constexpr int volume(int multiplier) const noexcept { return volume_ * multiplier; }
    constexpr void get_louder() noexcept { volume_ *= 2; }
 
@@ -442,6 +550,7 @@ int main()
    static_assert(noexcept(dyn_call(owner2, owner2.get_noise)));
 
    static constexpr auto owner3 = make_dyn_trait<noise_trait>(&d);
+   // static_assert(dyn_call(owner3, owner3.volume) == 9);
    static_assert(dyn_call(owner3, owner3.volume, 2) == 18);
    static_assert(dyn_call(owner3, owner3.get_secondary_noise) == "bark");
 
