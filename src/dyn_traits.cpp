@@ -550,7 +550,7 @@ int main()
    static_assert(noexcept(dyn_call(owner2, owner2.get_noise)));
 
    static constexpr auto owner3 = make_dyn_trait<noise_trait>(&d);
-   // static_assert(dyn_call(owner3, owner3.volume) == 9);
+   static_assert(dyn_call(owner3, owner3.volume) == 9);
    static_assert(dyn_call(owner3, owner3.volume, 2) == 18);
    static_assert(dyn_call(owner3, owner3.get_secondary_noise) == "bark");
 
