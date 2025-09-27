@@ -104,7 +104,9 @@ template<typename TraitClass, std::size_t FuncIndex, bool IsConst>
 struct func_caller {
    template<typename Class, typename... Args>
       requires(IsConst)
-   static constexpr decltype(auto) call(const void* c, Args&&... args) noexcept
+   static constexpr decltype(auto) call(const void* c, Args&&... args) noexcept(
+      noexcept((static_cast<const Class*>(c)->funcs_->template get<FuncIndex>())(
+         static_cast<const Class*>(c)->data_, std::forward<Args>(args)...)))
    {
       const auto* const ptr = static_cast<const Class*>(c);
       return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
@@ -112,7 +114,9 @@ struct func_caller {
 
    template<typename Class, typename... Args>
       requires(!IsConst)
-   static constexpr decltype(auto) call(void* c, Args&&... args) noexcept
+   static constexpr decltype(auto)
+      call(void* c, Args&&... args) noexcept(noexcept((static_cast<Class*>(c)->funcs_->template get<FuncIndex>())(
+         static_cast<Class*>(c)->data_, std::forward<Args>(args)...)))
    {
       auto* const ptr = static_cast<Class*>(c);
       return (ptr->funcs_->template get<FuncIndex>())(ptr->data_, std::forward<Args>(args)...);
