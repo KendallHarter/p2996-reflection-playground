@@ -300,27 +300,32 @@ consteval auto make_dyn_trait_pointers()
          // clang-format off
          []<std::size_t I>() -> [:func_ptrs[I]:] {
             // clang-format on
-            static constexpr auto produce_func_ptr_from_info = [](std::meta::info func_info) {
-               std::vector<std::meta::info> args;
-               args.push_back(std::meta::reflect_constant(func_info));
-               if (std::meta::is_const(func_info) || std::meta::is_static_member(func_info)) {
-                  args.push_back(^^const void*);
-                  args.push_back(^^const ToStore*);
-               }
-               else {
-                  args.push_back(^^void*);
-                  args.push_back(^^ToStore*);
-               }
-               for (const auto arg : std::meta::parameters_of(func_info)) {
-                  args.push_back(std::meta::type_of(arg));
-               }
+            static constexpr auto produce_func_ptr_from_info
+               = [](std::meta::info func_info, std::meta::info sub_into, bool is_default) {
+                    std::vector<std::meta::info> args;
+                    args.push_back(std::meta::reflect_constant(func_info));
+                    if (is_default) {
+                       args.push_back(^^Trait);
+                    }
+                    if (std::meta::is_const(func_info) || std::meta::is_static_member(func_info)) {
+                       args.push_back(^^const void*);
+                       args.push_back(^^const ToStore*);
+                    }
+                    else {
+                       args.push_back(^^void*);
+                       args.push_back(^^ToStore*);
+                    }
+                    for (const auto arg :
+                         std::meta::parameters_of(func_info) | std::views::drop(static_cast<int>(is_default))) {
+                       args.push_back(std::meta::type_of(arg));
+                    }
 
-               return std::meta::substitute(^^produce_func_ptr, args);
-            };
+                    return std::meta::substitute(sub_into, args);
+                 };
             template for (constexpr auto f : to_store_func)
             {
                if constexpr (std::meta::identifier_of(f) == std::meta::identifier_of(trait_funcs[I])) {
-                  return [:produce_func_ptr_from_info(f):];
+                  return [:produce_func_ptr_from_info(f, ^^produce_func_ptr, false):];
                }
             }
             // Default implementation
@@ -331,27 +336,7 @@ consteval auto make_dyn_trait_pointers()
                static constexpr auto is_default = !std::meta::annotations_of(f_sub, ^^decltype(default_impl)).empty();
                static_assert(is_default, "Function templates must be default implementations");
 
-               static constexpr auto to_ret = []() {
-                  std::vector<std::meta::info> args;
-                  args.push_back(std::meta::reflect_constant(f_sub));
-                  args.push_back(^^Trait);
-                  if (std::meta::is_const(f_sub)) {
-                     args.push_back(^^const void*);
-                     args.push_back(^^const ToStore*);
-                  }
-                  else {
-                     args.push_back(^^void*);
-                     args.push_back(^^ToStore*);
-                  }
-                  // ignore the first argument (it is basically an explicit this)
-                  for (const auto arg : std::meta::parameters_of(f_sub) | std::views::drop(1)) {
-                     args.push_back(std::meta::type_of(arg));
-                  }
-
-                  return std::meta::substitute(^^produce_default_func_ptr, args);
-               }();
-
-               return [:to_ret:];
+               return [:produce_func_ptr_from_info(f_sub, ^^produce_default_func_ptr, true):];
             }
             else {
                // This is std::meta::annotations_of_with_type in C++26
